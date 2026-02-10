@@ -9,7 +9,7 @@
 > **Architectural Philosophy:**  
 > Maximum atmosphere. Zero assets. Infinite replayability.  
 > Every game in this collection is a **single, self-contained HTML file** containing all logic, styling, and procedural audio synthesis. No images, no MP3s, no frameworks.
-
+> Originally was just part of the [JoJo's Utilities](https://jojos-utilities.web.app/games) website. Now serving as it's own repository.
 ---
 
 ## 🎯 QUICK START
