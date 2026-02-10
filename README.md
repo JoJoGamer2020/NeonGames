@@ -29,7 +29,7 @@
    npx http-server -p 8000
    ```
 
-3. **Open in browser:** Navigate to `http://localhost:8000/games.html`
+3. **Open in browser:** Navigate to `http://localhost:8000/index.html`
 
 **Alternatively:** Simply open any `.html` file directly in your browser. No server required for single-player experience.
 
@@ -37,7 +37,7 @@
 
 ## 💠 THE HUB
 
-### [`games.html`](./games.html) — **System Launcher**
+### [`index.html`](./index.html) — **System Launcher**
 The central gateway to the Neon Suite featuring a fully interactive arcade terminal.
 
 **Features:**
@@ -296,7 +296,7 @@ git push origin main
 # 2. Enable Pages
 # Go to: Settings → Pages → Source: main branch → Save
 
-# 3. Access at: https://yourusername.github.io/NeonGames/games.html
+# 3. Access at: https://yourusername.github.io/NeonGames/index.html
 ```
 
 ### Option 2: Netlify Drop
@@ -319,7 +319,7 @@ Upload files to: AWS S3, Azure Storage, Google Cloud Storage, or any web host. T
 
 ```
 NeonGames/
-├── games.html          # Hub/Launcher
+├── index.html          # Hub/Launcher
 ├── neonbreaker.html    # Brick Breaker
 ├── neonvoid.html       # Grappling Hook
 ├── neonrise.html       # Vertical Platformer
@@ -383,7 +383,7 @@ NeonGames/
    </body>
    </html>
    ```
-3. **Update `games.html`** to add launcher button with appropriate icon and description
+3. **Update `index.html`** to add launcher button with appropriate icon and description
 
 ### Modifying Audio
 
@@ -495,7 +495,7 @@ This project proves that modern web games don't need massive frameworks, gigabyt
 > **Frame Rate:** `OPTIMAL`  
 > **Welcome to:** `THE VOID`
 
-**[▶ LAUNCH HUB](https://jojogamer2020.github.io/NeonGames/games.html)**
+**[▶ LAUNCH HUB](https://jojogamer2020.github.io/NeonGames)**
 
 ---
 
