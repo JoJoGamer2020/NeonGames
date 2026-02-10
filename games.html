@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>JoJo's Utilities x Neon Games</title>
+    <style>
+        /* --- VARIABLES & CORE --- */
+        :root {
+            --neon-blue: #0ff;
+            --neon-green: #00ff88;
+            --neon-pink: #ff0055;
+            --neon-yellow: #ffff00;
+            --neon-purple: #bc13fe;
+            --bg-color: #050505;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            color: #fff;
+            height: 100vh;
+            width: 100vw;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
+        /* --- CRT SCANLINE OVERLAY --- */
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.2) 50%,
+                rgba(0,0,0,0.2)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0.6;
+        }
+
+        /* --- CANVAS BACKGROUND --- */
+        #bgCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            transition: transform 0.05s; /* Smooth beat pulse */
+        }
+
+        /* --- SYSTEM INIT SCREEN --- */
+        #init-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            cursor: pointer;
+            transition: opacity 0.5s;
+        }
+        .blink { animation: blinker 1s linear infinite; color: var(--neon-blue); text-shadow: 0 0 10px var(--neon-blue); }
+        @keyframes blinker { 50% { opacity: 0; } }
+
+        /* --- MAIN UI CONTAINER --- */
+        .container {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            width: 100%;
+            pointer-events: none; 
+        }
+
+        .panel {
+            background: rgba(5, 5, 5, 0.75);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            padding: 40px;
+            border-radius: 4px;
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.1), inset 0 0 20px rgba(0,0,0,0.8);
+            width: 90%;
+            max-width: 450px;
+            pointer-events: auto;
+            transform: perspective(1000px) rotateX(0deg);
+            transition: transform 0.1s;
+            position: relative;
+        }
+
+        /* Decorative Corners */
+        .corner {
+            position: absolute; width: 10px; height: 10px; border: 2px solid var(--neon-blue);
+            transition: all 0.3s;
+        }
+        .tl { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+        .tr { top: -2px; right: -2px; border-left: none; border-bottom: none; }
+        .bl { bottom: -2px; left: -2px; border-right: none; border-top: none; }
+        .br { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+
+        .panel:hover .corner { width: 20px; height: 20px; box-shadow: 0 0 10px var(--neon-blue); }
+
+        /* --- TYPOGRAPHY --- */
+        h1 {
+            color: var(--neon-blue);
+            font-size: 2.2rem;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            text-align: center;
+            margin: 0 0 30px 0;
+            text-shadow: 0 0 20px var(--neon-blue);
+            position: relative;
+        }
+        
+        .sub-x { font-size: 0.6em; color: #fff; vertical-align: middle; opacity: 0.8; }
+
+        /* Glitch Animation */
+        h1:hover { animation: glitch 0.3s cubic-bezier(.25, .46, .45, .94) both infinite; }
+        @keyframes glitch {
+            0% { transform: translate(0); }
+            20% { transform: translate(-2px, 2px); }
+            40% { transform: translate(-2px, -2px); }
+            60% { transform: translate(2px, 2px); }
+            80% { transform: translate(2px, -2px); }
+            100% { transform: translate(0); }
+        }
+
+        /* --- BUTTONS --- */
+        .game-list { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+
+        .game-btn {
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            text-decoration: none;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #333;
+            border-left: 4px solid #555;
+            padding: 15px 20px;
+            color: #fff;
+            font-weight: 700;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.1s;
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        /* Scanline wipe effect */
+        .game-btn::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            transition: left 0.5s;
+        }
+        .game-btn:hover::before { left: 100%; }
+
+        /* Colors */
+        .btn-core { border-left-color: var(--neon-blue); }
+        .btn-core:hover, .btn-core:active { background: rgba(0, 255, 255, 0.1); border-color: var(--neon-blue); box-shadow: 0 0 15px rgba(0,255,255,0.3); text-shadow: 0 0 8px var(--neon-blue); }
+
+        .btn-breaker { border-left-color: var(--neon-green); }
+        .btn-breaker:hover, .btn-breaker:active { background: rgba(0, 255, 136, 0.1); border-color: var(--neon-green); box-shadow: 0 0 15px rgba(0,255,136,0.3); text-shadow: 0 0 8px var(--neon-green); }
+
+        .btn-rise { border-left-color: var(--neon-pink); }
+        .btn-rise:hover, .btn-rise:active { background: rgba(255, 0, 85, 0.1); border-color: var(--neon-pink); box-shadow: 0 0 15px rgba(255,0,85,0.3); text-shadow: 0 0 8px var(--neon-pink); }
+
+        .btn-catch { border-left-color: var(--neon-yellow); }
+        .btn-catch:hover, .btn-catch:active { background: rgba(255, 255, 0, 0.1); border-color: var(--neon-yellow); box-shadow: 0 0 15px rgba(255,255,0,0.3); text-shadow: 0 0 8px var(--neon-yellow); }
+
+        .btn-void { border-left-color: var(--neon-purple); }
+        .btn-void:hover, .btn-void:active { background: rgba(188, 19, 254, 0.1); border-color: var(--neon-purple); box-shadow: 0 0 15px rgba(188,19,254,0.3); text-shadow: 0 0 8px var(--neon-purple); }
+
+        .game-btn:active { transform: scale(0.95); }
+
+        .arrow { font-size: 0.8em; opacity: 0; transform: translateX(-10px); transition: all 0.2s; }
+        .game-btn:hover .arrow, .game-btn:active .arrow { opacity: 1; transform: translateX(0); }
+
+        /* --- FOOTER --- */
+        footer {
+            margin-top: 30px;
+            font-size: 0.7rem;
+            color: #666;
+            text-align: center;
+            border-top: 1px solid #222;
+            padding-top: 10px;
+            width: 100%;
+            letter-spacing: 1px;
+        }
+
+        /* --- DECORATIVE HUD ELEMENTS --- */
+        .hud-text {
+            position: absolute;
+            font-size: 10px;
+            color: rgba(0, 255, 255, 0.3);
+            pointer-events: none;
+            z-index: 5;
+        }
+        .h-tl { top: 20px; left: 20px; }
+        /* Moved h-tr down to accomodate the audio toggle button */
+        .h-tr { top: 60px; right: 20px; text-align: right; }
+        .h-bl { bottom: 20px; left: 20px; }
+        .h-br { bottom: 20px; right: 20px; text-align: right; }
+
+        /* --- AUDIO TOGGLE --- */
+        #mute-toggle {
+            position: absolute; top: 15px; right: 15px;
+            background: rgba(0,0,0,0.8); border: 1px solid #333;
+            color: #555; padding: 5px 10px; font-size: 0.7rem;
+            cursor: pointer; pointer-events: auto; z-index: 100;
+            text-transform: uppercase; font-family: inherit;
+        }
+        #mute-toggle.active { color: var(--neon-blue); border-color: var(--neon-blue); text-shadow: 0 0 5px var(--neon-blue); }
+
+        @media (max-width: 450px) {
+            h1 { font-size: 1.8rem; }
+            .panel { padding: 30px 20px; }
+            .game-btn { padding: 12px 15px; font-size: 0.95rem; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="scanlines"></div>
+    <canvas id="bgCanvas"></canvas>
+
+    <div id="init-screen">
+        <h2 style="color:#0ff; text-shadow:0 0 20px #0ff; font-size:2rem; margin-bottom:10px;">SYSTEM HALTED</h2>
+        <div class="blink">[ CLICK OR TAP TO INITIALIZE ]</div>
+        <div style="margin-top:20px; font-size:0.8rem; color:#555;">AUDIO // VIDEO // INPUT</div>
+    </div>
+
+    <button id="mute-toggle" class="active">AUDIO: ON</button>
+
+    <div class="hud-text h-tl">JOJO_SYS_V3.0<br>MEM: OK</div>
+    <div class="hud-text h-tr">NET: CONNECTED<br>FPS: <span id="fps-counter">60</span></div>
+    <div class="hud-text h-bl">COORD: <span id="coord-display">000:000</span></div>
+    <div class="hud-text h-br">STATUS: ONLINE<br>SECURE</div>
+
+    <div class="container">
+        <div class="panel">
+            <div class="corner tl"></div><div class="corner tr"></div>
+            <div class="corner bl"></div><div class="corner br"></div>
+
+            <h1>JoJo's Utilities<br><span class="sub-x">x</span><br>Neon Games</h1>
+            
+            <div class="game-list">
+                <a href="https://jojos-utilities.web.app/neoncore" class="game-btn btn-core" data-sound="core">
+                    <span>Neon Core</span> <span class="arrow">>>></span>
+                </a>
+                <a href="https://jojos-utilities.web.app/neonbreaker" class="game-btn btn-breaker" data-sound="breaker">
+                    <span>Neon Breaker</span> <span class="arrow">>>></span>
+                </a>
+                <a href="https://jojos-utilities.web.app/neonrise" class="game-btn btn-rise" data-sound="rise">
+                    <span>Neon Rise</span> <span class="arrow">>>></span>
+                </a>
+                <a href="https://jojos-utilities.web.app/neoncatch" class="game-btn btn-catch" data-sound="catch">
+                    <span>Neon Catch</span> <span class="arrow">>>></span>
+                </a>
+                <a href="https://jojos-utilities.web.app/neonvoid" class="game-btn btn-void" data-sound="void">
+                    <span>Neon Void</span> <span class="arrow">>>></span>
+                </a>
+            </div>
+
+            <footer>
+                &copy; 2025 JoJo's Utilities. All rights reserved.
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ==========================================
+         * THE CYBER-BEAT ENGINE (Procedural Music)
+         * ==========================================
+         */
+        const MusicEngine = {
+            ctx: null,
+            masterGain: null,
+            isPlaying: false,
+            nextNoteTime: 0.0,
+            step: 0,
+            tempo: 110.0,
+            lookahead: 25.0,
+            scheduleAheadTime: 0.1,
+            timerID: null,
+            bassNote: 36, // Low C
+
+            init() {
+                if (this.ctx) return;
+                const AC = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AC();
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.gain.value = 0.5;
+                
+                // Add a compressor to glue the mix
+                const compressor = this.ctx.createDynamicsCompressor();
+                compressor.threshold.value = -10;
+                compressor.knee.value = 40;
+                compressor.ratio.value = 12;
+                
+                this.masterGain.connect(compressor);
+                compressor.connect(this.ctx.destination);
+            },
+
+            toggle() {
+                if(this.isPlaying) {
+                    this.stop();
+                } else {
+                    this.start();
+                }
+                return this.isPlaying;
+            },
+
+            start() {
+                if(!this.ctx) this.init();
+                if(this.ctx.state === 'suspended') this.ctx.resume();
+                this.isPlaying = true;
+                this.step = 0;
+                this.nextNoteTime = this.ctx.currentTime;
+                this.scheduler();
+            },
+
+            stop() {
+                this.isPlaying = false;
+                window.clearTimeout(this.timerID);
+            },
+
+            scheduler() {
+                while (this.nextNoteTime < this.ctx.currentTime + this.scheduleAheadTime) {
+                    this.scheduleNote(this.step, this.nextNoteTime);
+                    this.nextStep();
+                }
+                this.timerID = window.setTimeout(() => this.scheduler(), this.lookahead);
+            },
+
+            nextStep() {
+                const secondsPerBeat = 60.0 / this.tempo;
+                this.nextNoteTime += 0.25 * secondsPerBeat; // 16th notes
+                this.step = (this.step + 1) % 16; // 16 step loop
+            },
+
+            scheduleNote(step, time) {
+                // VISUAL PULSE ON KICK (Step 0, 4, 8, 12)
+                if (step % 4 === 0) {
+                    this.triggerKick(time);
+                    setTimeout(() => pulseScreen(), Math.max(0, (time - this.ctx.currentTime) * 1000));
+                }
+
+                // SNARE (Step 4, 12)
+                if (step === 4 || step === 12) {
+                    this.triggerSnare(time);
+                }
+
+                // HI-HATS (Every even step)
+                if (step % 2 === 0) {
+                    this.triggerHat(time, step % 4 === 0 ? 0.05 : 0.1); // Accent off-beats
+                }
+
+                // BASS (Rolling 16ths, duck on kick)
+                if (step % 4 !== 0) { // Sidechain: Don't play bass on Kick hit for "pumping" feel
+                   this.triggerBass(time, this.bassNote);
+                }
+
+                // ARP (Polyrhythm)
+                if ([0, 3, 6, 9, 12, 15].includes(step)) {
+                    let note = this.bassNote + 24; // 2 octaves up
+                    if (step === 3 || step === 9) note += 3; // Minor 3rd
+                    if (step === 12) note += 7; // 5th
+                    this.triggerArp(time, note);
+                }
+            },
+
+            // --- SYNTHESIS VOICES ---
+
+            triggerKick(time) {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain); gain.connect(this.masterGain);
+                
+                osc.frequency.setValueAtTime(150, time);
+                osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.5);
+                
+                gain.gain.setValueAtTime(1.0, time);
+                gain.gain.exponentialRampToValueAtTime(0.01, time + 0.5);
+                
+                osc.start(time); osc.stop(time + 0.5);
+            },
+
+            triggerSnare(time) {
+                // Noise Buffer
+                const bufferSize = this.ctx.sampleRate * 0.2; // 200ms
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'highpass';
+                filter.frequency.value = 1000;
+                
+                const gain = this.ctx.createGain();
+                noise.connect(filter); filter.connect(gain); gain.connect(this.masterGain);
+                
+                gain.gain.setValueAtTime(0.4, time);
+                gain.gain.exponentialRampToValueAtTime(0.01, time + 0.2);
+                
+                noise.start(time);
+            },
+
+            triggerHat(time, vol) {
+                const bufferSize = this.ctx.sampleRate * 0.05;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'highpass';
+                filter.frequency.value = 5000;
+                
+                const gain = this.ctx.createGain();
+                noise.connect(filter); filter.connect(gain); gain.connect(this.masterGain);
+                
+                gain.gain.setValueAtTime(vol * 0.5, time);
+                gain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+                
+                noise.start(time);
+            },
+
+            triggerBass(time, freq) {
+                const osc = this.ctx.createOscillator();
+                const filter = this.ctx.createBiquadFilter();
+                const gain = this.ctx.createGain();
+                
+                osc.type = 'sawtooth';
+                osc.frequency.value = freq; 
+                
+                // Convert Note to Freq for dynamic bass
+                const f = 440 * Math.pow(2, (freq - 69) / 12);
+                osc.frequency.value = f;
+
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(200, time);
+                filter.frequency.linearRampToValueAtTime(800, time + 0.1); // Wah effect
+                filter.frequency.linearRampToValueAtTime(200, time + 0.2);
+
+                gain.gain.setValueAtTime(0.3, time);
+                gain.gain.linearRampToValueAtTime(0, time + 0.2);
+
+                osc.connect(filter); filter.connect(gain); gain.connect(this.masterGain);
+                osc.start(time); osc.stop(time + 0.2);
+            },
+
+            triggerArp(time, freq) {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                // Delay line for "Echo"
+                const delay = this.ctx.createDelay();
+                const feedback = this.ctx.createGain();
+                
+                delay.delayTime.value = 0.25; // Quarter note echo
+                feedback.gain.value = 0.3;
+
+                osc.type = 'square';
+                const f = 440 * Math.pow(2, (freq - 69) / 12);
+                osc.frequency.value = f;
+
+                gain.gain.setValueAtTime(0.05, time);
+                gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                
+                // Send to delay
+                gain.connect(delay);
+                delay.connect(feedback);
+                feedback.connect(delay);
+                delay.connect(this.masterGain);
+
+                osc.start(time); osc.stop(time + 0.3);
+            },
+
+            playSFX(type) {
+                if (!this.ctx) return;
+                const t = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.connect(gain); gain.connect(this.masterGain);
+
+                if (type === 'hover') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(1000, t);
+                    osc.frequency.linearRampToValueAtTime(2000, t + 0.05);
+                    gain.gain.setValueAtTime(0.05, t);
+                    gain.gain.linearRampToValueAtTime(0, t + 0.05);
+                    osc.start(t); osc.stop(t + 0.05);
+                } else if (type === 'click') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(100, t);
+                    osc.frequency.exponentialRampToValueAtTime(10, t + 0.1);
+                    gain.gain.setValueAtTime(0.3, t);
+                    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+                    osc.start(t); osc.stop(t + 0.1);
+                }
+            }
+        };
+
+        /**
+         * ------------------------------------------------------------------
+         * VISUALS & PHYSICS ENGINE (Canvas)
+         * ------------------------------------------------------------------
+         */
+        const canvas = document.getElementById('bgCanvas');
+        const ctx = canvas.getContext('2d');
+        const fpsDisplay = document.getElementById('fps-counter');
+        const coordDisplay = document.getElementById('coord-display');
+        const panel = document.querySelector('.panel');
+        
+        let width, height;
+        let particles = [];
+        let mouse = { x: -1000, y: -1000 };
+        let beatScale = 1.0;
+
+        const PARTICLE_COUNT = 100;
+        const CONNECT_DISTANCE = 150;
+        const MOUSE_REPULSION = 150;
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = (Math.random() - 0.5) * 1.5;
+                this.vy = (Math.random() - 0.5) * 1.5;
+                this.size = Math.random() * 2 + 1;
+                this.color = Math.random() > 0.5 ? '#0ff' : '#00ff88'; 
+                if(Math.random() > 0.9) this.color = '#ff0055'; 
+            }
+
+            update() {
+                this.x += this.vx; this.y += this.vy;
+                const dx = this.x - mouse.x;
+                const dy = this.y - mouse.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < MOUSE_REPULSION) {
+                    const force = (MOUSE_REPULSION - dist) / MOUSE_REPULSION;
+                    const angle = Math.atan2(dy, dx);
+                    this.x += Math.cos(angle) * force * 5;
+                    this.y += Math.sin(angle) * force * 5;
+                }
+                if (this.x < 0 || this.x > width) this.vx *= -1;
+                if (this.y < 0 || this.y > height) this.vy *= -1;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function resize() {
+            width = window.innerWidth; height = window.innerHeight;
+            canvas.width = width; canvas.height = height;
+            particles = [];
+            for (let i = 0; i < PARTICLE_COUNT; i++) particles.push(new Particle());
+        }
+
+        function pulseScreen() {
+            beatScale = 1.05; // Visual jump
+        }
+
+        function animate() {
+            // BEAT VISUALS LOGIC
+            beatScale += (1.0 - beatScale) * 0.1;
+            canvas.style.transform = `scale(${beatScale})`;
+            // Apply subtle scale to panel without overriding tilt
+            const currentTransform = panel.style.transform || 'perspective(1000px) rotateX(0deg) rotateY(0deg)';
+            if(currentTransform.includes('scale')) {
+                 // Replace existing scale
+                 panel.style.transform = currentTransform.replace(/scale\([0-9.]+\)/, `scale(${1 + (beatScale-1)*0.5})`);
+            } else {
+                 panel.style.transform = currentTransform + ` scale(${1 + (beatScale-1)*0.5})`;
+            }
+
+            ctx.clearRect(0, 0, width, height);
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i < particles.length; i++) {
+                let p1 = particles[i];
+                p1.update();
+                for (let j = i + 1; j < particles.length; j++) {
+                    let p2 = particles[j];
+                    let dx = p1.x - p2.x; let dy = p1.y - p2.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < CONNECT_DISTANCE) {
+                        const opacity = 1 - (dist / CONNECT_DISTANCE);
+                        ctx.strokeStyle = `rgba(0, 255, 255, ${opacity * 0.4})`;
+                        ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+                    }
+                }
+                p1.draw();
+            }
+            requestAnimationFrame(animate);
+        }
+
+        // --- INTERACTION HANDLING ---
+
+        const updateInput = (x, y) => {
+            mouse.x = x;
+            mouse.y = y;
+            coordDisplay.innerText = 
+                String(Math.floor(mouse.x)).padStart(3, '0') + ":" + 
+                String(Math.floor(mouse.y)).padStart(3, '0');
+            
+            // 3D Tilt Logic
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const tiltX = (mouse.y - centerY) / 50; 
+            const tiltY = (centerX - mouse.x) / 50;
+            
+            // Update base transform, animate loop handles scaling
+            panel.style.transform = `perspective(1000px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) scale(${1 + (beatScale-1)*0.5})`;
+        };
+
+        window.addEventListener('mousemove', (e) => updateInput(e.clientX, e.clientY));
+        window.addEventListener('touchmove', (e) => {
+            const touch = e.touches[0];
+            updateInput(touch.clientX, touch.clientY);
+        }, {passive: true});
+
+        // Initialize System
+        const initScreen = document.getElementById('init-screen');
+        initScreen.addEventListener('click', () => {
+            MusicEngine.init();
+            MusicEngine.start();
+            initScreen.style.opacity = '0';
+            setTimeout(() => { initScreen.style.display = 'none'; }, 500);
+            resize(); animate();
+        });
+
+        // MUTE TOGGLE
+        const muteBtn = document.getElementById('mute-toggle');
+        muteBtn.addEventListener('pointerdown', (e) => {
+            e.stopPropagation();
+            if(!MusicEngine.ctx) return;
+            const isPlaying = MusicEngine.toggle();
+            muteBtn.classList.toggle('active', isPlaying);
+            muteBtn.innerText = isPlaying ? "AUDIO: ON" : "AUDIO: OFF";
+        });
+
+        // Button Sounds
+        document.querySelectorAll('.game-btn').forEach(btn => {
+            btn.addEventListener('pointerenter', () => {
+                MusicEngine.playSFX('hover');
+                btn.style.transform = `translate(${Math.random()*2-1}px, ${Math.random()*2-1}px)`;
+                setTimeout(() => btn.style.transform = 'none', 100);
+            });
+            btn.addEventListener('pointerdown', () => {
+                MusicEngine.playSFX('click');
+            });
+        });
+
+        window.addEventListener('resize', resize);
+        
+        // Random FPS Fluctuation
+        setInterval(() => { fpsDisplay.innerText = 58 + Math.floor(Math.random() * 3); }, 500);
+
+    </script>
+</body>
+</html>

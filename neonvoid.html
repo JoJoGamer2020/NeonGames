@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Void: Audio Enhanced</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050505;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            cursor: crosshair;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            pointer-events: none;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            padding: 0 20px;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+        .hud-box {
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid #0ff;
+            padding: 10px 20px;
+            border-radius: 20px;
+            backdrop-filter: blur(2px);
+            color: #fff;
+            font-weight: bold;
+            text-shadow: 0 0 10px #0ff;
+            min-width: 120px;
+            text-align: center;
+        }
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            pointer-events: auto;
+        }
+        h1 {
+            color: #0ff;
+            font-size: 3rem;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            text-shadow: 0 0 25px #0ff;
+            margin: 0 0 10px 0;
+            text-align: center;
+        }
+        p {
+            color: #fff;
+            font-size: 1.1rem;
+            margin: 5px 0;
+            text-align: center;
+        }
+        .btn-container {
+            display: flex;
+            gap: 20px;
+            margin-top: 40px;
+        }
+        .btn {
+            padding: 20px 40px;
+            font-size: 1.2rem;
+            color: #050505;
+            border: none;
+            border-radius: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            touch-action: manipulation;
+            transition: transform 0.1s;
+        }
+        .btn-normal {
+            background: #0ff;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
+        }
+        .btn-hard {
+            background: #ff0055;
+            color: white;
+            box-shadow: 0 0 20px rgba(255, 0, 85, 0.6);
+        }
+        .btn:active {
+            transform: scale(0.95);
+        }
+        .highlight { color: #ff0055; font-weight: bold; }
+        .stats { margin-top: 20px; color: #aaa; font-size: 0.9rem; }
+        
+        /* Volume Toggle */
+        #mute-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: transparent;
+            border: 1px solid #555;
+            color: #555;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 30;
+            font-family: inherit;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div class="hud-box">SCORE: <span id="score">0</span></div>
+        <div class="hud-box">BEST: <span id="high-score">0</span></div>
+    </div>
+
+    <button id="mute-btn">SOUND: ON</button>
+
+    <div id="start-screen">
+        <h1>Neon Void</h1>
+        <p>TAP <span class="highlight">ON</span> ORBS TO GRAPPLE.</p>
+        <div class="stats">HIGH SCORE: <span id="menu-highscore">0</span></div>
+        
+        <div class="btn-container">
+            <button class="btn btn-normal" id="btn-normal">NORMAL</button>
+            <button class="btn btn-hard" id="btn-hard">HARD</button>
+        </div>
+        
+        <p style="font-size: 0.8rem; margin-top: 20px; color: #555;">
+            HARD MODE: Deadly Walls & Weak Grapple
+        </p>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    // --- AUDIO SYSTEM (Web Audio API) ---
+    const AudioSys = {
+        ctx: null,
+        masterGain: null,
+        bgmOsc1: null,
+        bgmOsc2: null,
+        bgmGain: null,
+        isMuted: false,
+
+        init: function() {
+            if (!this.ctx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioContext();
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.gain.value = 0.3; // Overall volume
+                this.masterGain.connect(this.ctx.destination);
+            }
+            if (this.ctx.state === 'suspended') {
+                this.ctx.resume();
+            }
+        },
+
+        toggleMute: function() {
+            this.isMuted = !this.isMuted;
+            if (this.ctx) {
+                if (this.isMuted) {
+                    this.masterGain.disconnect();
+                } else {
+                    this.masterGain.connect(this.ctx.destination);
+                }
+            }
+            return this.isMuted;
+        },
+
+        startBGM: function() {
+            if (!this.ctx) return;
+            this.stopBGM(); // Ensure no duplicates
+
+            // A dark, throbbing drone
+            this.bgmOsc1 = this.ctx.createOscillator();
+            this.bgmOsc2 = this.ctx.createOscillator();
+            this.bgmGain = this.ctx.createGain();
+
+            this.bgmOsc1.type = 'sawtooth';
+            this.bgmOsc1.frequency.value = 55; // Low A
+            
+            this.bgmOsc2.type = 'sine';
+            this.bgmOsc2.frequency.value = 56; // Slight detune for pulsing effect
+
+            // Lowpass filter for muffled underwater neon sound
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 400;
+
+            this.bgmOsc1.connect(this.bgmGain);
+            this.bgmOsc2.connect(this.bgmGain);
+            this.bgmGain.connect(filter);
+            filter.connect(this.masterGain);
+
+            this.bgmGain.gain.value = 0.4;
+            this.bgmOsc1.start();
+            this.bgmOsc2.start();
+        },
+
+        stopBGM: function() {
+            if (this.bgmOsc1) {
+                try {
+                    const now = this.ctx.currentTime;
+                    this.bgmGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+                    this.bgmOsc1.stop(now + 0.5);
+                    this.bgmOsc2.stop(now + 0.5);
+                } catch(e){}
+                this.bgmOsc1 = null;
+            }
+        },
+
+        playSFX: function(type) {
+            if (!this.ctx || this.isMuted) return;
+            const t = this.ctx.currentTime;
+            
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.connect(gain);
+            gain.connect(this.masterGain);
+
+            switch (type) {
+                case 'grapple':
+                    // High tech blip
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(800, t);
+                    osc.frequency.exponentialRampToValueAtTime(1200, t + 0.1);
+                    gain.gain.setValueAtTime(0.5, t);
+                    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+                    osc.start(t);
+                    osc.stop(t + 0.1);
+                    break;
+
+                case 'release':
+                    // White noise burst logic (simplified via osc for performance)
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(200, t);
+                    osc.frequency.exponentialRampToValueAtTime(50, t + 0.15);
+                    gain.gain.setValueAtTime(0.4, t);
+                    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+                    osc.start(t);
+                    osc.stop(t + 0.15);
+                    break;
+                
+                case 'bump':
+                    // Low thud
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(100, t);
+                    osc.frequency.exponentialRampToValueAtTime(40, t + 0.1);
+                    // Lowpass filter for thud
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.value = 200;
+                    osc.disconnect();
+                    osc.connect(filter);
+                    filter.connect(gain);
+                    
+                    gain.gain.setValueAtTime(0.5, t);
+                    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+                    osc.start(t);
+                    osc.stop(t + 0.1);
+                    break;
+
+                case 'gameover':
+                    // Power down
+                    this.stopBGM();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(200, t);
+                    osc.frequency.exponentialRampToValueAtTime(10, t + 1);
+                    gain.gain.setValueAtTime(0.5, t);
+                    gain.gain.linearRampToValueAtTime(0, t + 1);
+                    osc.start(t);
+                    osc.stop(t + 1);
+                    break;
+            }
+        }
+    };
+
+    // --- SAVED DATA ---
+    function getHighScore() {
+        try { return localStorage.getItem('neonVoid_highscore') || 0; } catch(e) { return 0; }
+    }
+    function setHighScore(val) {
+        try { localStorage.setItem('neonVoid_highscore', Math.floor(val)); } catch(e) {}
+        updateHighScoreDisplay();
+    }
+    function updateHighScoreDisplay() {
+        const val = getHighScore();
+        const el1 = document.getElementById('high-score');
+        const el2 = document.getElementById('menu-highscore');
+        if(el1) el1.innerText = val;
+        if(el2) el2.innerText = val;
+    }
+    updateHighScoreDisplay();
+
+    // --- CONFIGURATION ---
+    const CONFIG_NORMAL = {
+        mode: 'NORMAL',
+        gravity: 0.1,         
+        hookStrength: 0.9,    
+        releaseBoost: 1.25,   
+        friction: 0.99,       
+        wallBounce: 0.6,      
+        ceilingBounce: 0.5,   
+        maxSpeed: 15,         
+        scrollSpeed: 1.3,     
+        hitboxPadding: 45,    
+        deadlyWalls: false    
+    };
+
+    const CONFIG_HARD = {
+        mode: 'HARD',
+        gravity: 0.1,         
+        hookStrength: 0.65,   
+        releaseBoost: 1.1,    
+        friction: 0.99,       
+        wallBounce: 0,        
+        ceilingBounce: 0.5,   
+        maxSpeed: 15,         
+        scrollSpeed: 1.4,     
+        hitboxPadding: 45,    
+        deadlyWalls: true     
+    };
+
+    let CURRENT_CONFIG = CONFIG_NORMAL;
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const uiScore = document.getElementById('score');
+    const startScreen = document.getElementById('start-screen');
+    const titleText = document.querySelector('#start-screen h1');
+    const menuStats = document.querySelector('.stats');
+    const muteBtn = document.getElementById('mute-btn');
+
+    let width, height;
+    
+    // Layout Variables
+    let gameLeft = 0;
+    let gameRight = 0;
+    let isDesktopMode = false;
+
+    let animationId;
+    let score = 0;
+    let isPlaying = false;
+    let shakeIntensity = 0;
+    let deathTimer = null;
+    let activeTarget = null; 
+
+    let player;
+    let nodes = [];
+    let particles = [];
+    let stars = [];
+
+    // --- MUTE TOGGLE ---
+    muteBtn.addEventListener('click', () => {
+        AudioSys.init(); // Initialize context if clicked here first
+        const muted = AudioSys.toggleMute();
+        muteBtn.innerText = muted ? "SOUND: OFF" : "SOUND: ON";
+        muteBtn.style.color = muted ? "#555" : "#0ff";
+        muteBtn.style.borderColor = muted ? "#555" : "#0ff";
+    });
+
+    // --- RESIZE & BOUNDARY CALCULATION ---
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+        
+        // --- RESPONSIVE LOGIC ---
+        const DESKTOP_THRESHOLD = 800;
+        const MAX_GAME_WIDTH = 600;
+        
+        if (width > DESKTOP_THRESHOLD) {
+            isDesktopMode = true;
+            let gameWidth = MAX_GAME_WIDTH;
+            gameLeft = (width / 2) - (gameWidth / 2);
+            gameRight = (width / 2) + (gameWidth / 2);
+        } else {
+            isDesktopMode = false;
+            gameLeft = 0;
+            gameRight = width;
+        }
+
+        // Stars
+        stars = [];
+        for(let i=0; i<80; i++) {
+            stars.push({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                size: Math.random() * 2,
+                alpha: Math.random() * 0.5 + 0.1
+            });
+        }
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // --- INPUT ---
+    function getEventPos(e) {
+        if(e.touches && e.touches.length > 0) {
+            return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        } else {
+            return { x: e.clientX, y: e.clientY };
+        }
+    }
+
+    const handleInputStart = (e) => {
+        if (!isPlaying) return;
+        if (e.type === 'touchstart') e.preventDefault();
+        
+        const pos = getEventPos(e);
+        let closestNode = null;
+        let closestDist = Infinity;
+
+        nodes.forEach(node => {
+            const dist = Math.hypot(node.x - pos.x, node.y - pos.y);
+            if (dist < (node.radius + CURRENT_CONFIG.hitboxPadding)) {
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestNode = node;
+                }
+            }
+        });
+
+        if (closestNode) {
+            activeTarget = closestNode;
+            AudioSys.playSFX('grapple'); // SOUND TRIGGER
+        }
+    };
+    
+    const handleInputEnd = () => { 
+        if (isPlaying && activeTarget && player.vy < -2) {
+            player.vx *= CURRENT_CONFIG.releaseBoost;
+            player.vy *= CURRENT_CONFIG.releaseBoost;
+            createThrustParticles();
+            AudioSys.playSFX('release'); // SOUND TRIGGER
+        }
+        activeTarget = null; 
+    };
+
+    document.addEventListener('mousedown', handleInputStart);
+    document.addEventListener('touchstart', handleInputStart, {passive: false});
+    document.addEventListener('mouseup', handleInputEnd);
+    document.addEventListener('touchend', handleInputEnd);
+
+    // --- CLASSES ---
+
+    class Player {
+        constructor() {
+            this.x = gameLeft + ((gameRight - gameLeft) / 2);
+            this.y = height / 2;
+            this.vx = 0;
+            this.vy = -3; 
+            this.radius = 8;
+            this.trail = [];
+        }
+
+        update() {
+            // --- DYNAMIC GRAVITY ---
+            let gravityFactor = 1.0;
+            if (this.y > 0) {
+                gravityFactor = 1 + (this.y / height) * 0.6;
+            }
+            
+            this.vy += CURRENT_CONFIG.gravity * gravityFactor;
+
+            if (activeTarget) {
+                if (!activeTarget.markedForDeletion) {
+                    let dx = activeTarget.x - this.x;
+                    let dy = activeTarget.y - this.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    this.vx += (dx / dist) * CURRENT_CONFIG.hookStrength;
+                    this.vy += (dy / dist) * CURRENT_CONFIG.hookStrength;
+
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(activeTarget.x, activeTarget.y);
+                    ctx.strokeStyle = activeTarget.color;
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.arc(activeTarget.x, activeTarget.y, activeTarget.radius + 5, 0, Math.PI*2);
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                } else {
+                    activeTarget = null;
+                }
+            }
+
+            this.vx *= CURRENT_CONFIG.friction;
+            this.vy *= CURRENT_CONFIG.friction;
+
+            let speed = Math.sqrt(this.vx*this.vx + this.vy*this.vy);
+            if (speed > CURRENT_CONFIG.maxSpeed) {
+                this.vx = (this.vx / speed) * CURRENT_CONFIG.maxSpeed;
+                this.vy = (this.vy / speed) * CURRENT_CONFIG.maxSpeed;
+            }
+
+            this.x += this.vx;
+            this.y += this.vy;
+
+            // --- WALL LOGIC ---
+            if (this.x < gameLeft + this.radius) {
+                if (CURRENT_CONFIG.deadlyWalls) {
+                    triggerGameOver();
+                } else {
+                    this.x = gameLeft + this.radius;
+                    // Only play sound if hitting wall with force
+                    if (Math.abs(this.vx) > 2) AudioSys.playSFX('bump');
+                    this.vx *= -CURRENT_CONFIG.wallBounce;
+                }
+            }
+            if (this.x > gameRight - this.radius) {
+                if (CURRENT_CONFIG.deadlyWalls) {
+                    triggerGameOver();
+                } else {
+                    this.x = gameRight - this.radius;
+                    if (Math.abs(this.vx) > 2) AudioSys.playSFX('bump');
+                    this.vx *= -CURRENT_CONFIG.wallBounce;
+                }
+            }
+
+            if (this.y < this.radius) {
+                this.y = this.radius;
+                this.vy = Math.abs(this.vy) * CURRENT_CONFIG.ceilingBounce;
+                createImpact(this.x, this.y);
+                AudioSys.playSFX('bump');
+            }
+
+            this.trail.push({x: this.x, y: this.y});
+            if (this.trail.length > 20) this.trail.shift();
+        }
+
+        draw() {
+            if (this.trail.length > 1) {
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                ctx.lineWidth = 3;
+                for(let t of this.trail) ctx.lineTo(t.x, t.y);
+                ctx.stroke();
+            }
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = 'white';
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    class Node {
+        constructor(yPos) {
+            let safeWidth = (gameRight - gameLeft) - 60; 
+            this.x = gameLeft + 30 + (Math.random() * safeWidth);
+            this.y = yPos;
+            this.radius = Math.random() * 8 + 12;
+            this.color = ['#00ffaa', '#00ccff', '#ff0055', '#ffee00'][Math.floor(Math.random() * 4)];
+            this.markedForDeletion = false;
+        }
+
+        update() {
+            this.y += CURRENT_CONFIG.scrollSpeed + (score / 2000); 
+            if (this.y > height + 50) this.markedForDeletion = true;
+        }
+
+        draw() {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = this.color;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    class Particle {
+        constructor(x, y, color, speed) {
+            this.x = x;
+            this.y = y;
+            this.vx = (Math.random() - 0.5) * speed;
+            this.vy = (Math.random() - 0.5) * speed;
+            this.life = 1;
+            this.color = color;
+        }
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.life -= 0.04;
+        }
+        draw() {
+            ctx.globalAlpha = Math.max(0, this.life);
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x, this.y, 3, 3);
+            ctx.globalAlpha = 1;
+        }
+    }
+
+    // --- GAME ENGINE ---
+
+    function startGame(mode) {
+        // Init Audio
+        AudioSys.init();
+        AudioSys.startBGM();
+
+        if (deathTimer) clearTimeout(deathTimer);
+        deathTimer = null;
+
+        if (mode === 'normal') CURRENT_CONFIG = CONFIG_NORMAL;
+        if (mode === 'hard') CURRENT_CONFIG = CONFIG_HARD;
+
+        startScreen.style.display = 'none';
+        
+        if(animationId) cancelAnimationFrame(animationId);
+        resize();
+
+        player = new Player();
+        nodes = [];
+        particles = [];
+        score = 0;
+        activeTarget = null;
+        
+        let spacing = height / 5;
+        for(let i=0; i<6; i++) {
+            let n = new Node(i * spacing);
+            let centerX = gameLeft + ((gameRight - gameLeft) / 2);
+            n.x = centerX + ((Math.random() - 0.5) * 100);
+            nodes.push(n);
+        }
+
+        isPlaying = true;
+        uiScore.innerText = "0";
+        loop();
+    }
+
+    function handleSpawning() {
+        let highestNodeY = height;
+        nodes.forEach(n => { if(n.y < highestNodeY) highestNodeY = n.y; });
+        if (highestNodeY > 50) nodes.push(new Node(-100));
+    }
+
+    function createThrustParticles() {
+        for(let i=0; i<8; i++) {
+            let p = new Particle(player.x, player.y, '#0ff', 4);
+            p.vy = Math.abs(p.vy) + 2; 
+            particles.push(p);
+        }
+    }
+
+    function createImpact(x, y) {
+        for(let i=0; i<5; i++) {
+            particles.push(new Particle(x, y, '#fff', 3));
+        }
+    }
+
+    function triggerGameOver() {
+        if (!isPlaying) return;
+        
+        AudioSys.playSFX('gameover'); // SOUND TRIGGER
+
+        isPlaying = false;
+        shakeIntensity = 20;
+        activeTarget = null;
+        
+        let savedBest = getHighScore();
+        if (score > savedBest) {
+            setHighScore(score);
+        }
+        updateHighScoreDisplay();
+
+        for(let i=0; i<30; i++) particles.push(new Particle(player.x, player.y, '#fff', 8));
+
+        deathTimer = setTimeout(() => {
+            startScreen.style.display = 'flex';
+            titleText.innerText = "GAME OVER";
+            menuStats.innerText = "SCORE: " + Math.floor(score) + " | BEST: " + getHighScore();
+        }, 1200);
+    }
+
+    function loop() {
+        animationId = requestAnimationFrame(loop);
+
+        let shakeX = 0, shakeY = 0;
+        if (shakeIntensity > 0) {
+            shakeX = (Math.random() - 0.5) * shakeIntensity;
+            shakeY = (Math.random() - 0.5) * shakeIntensity;
+            shakeIntensity *= 0.9;
+        }
+
+        ctx.fillStyle = '#050505';
+        ctx.fillRect(0, 0, width, height);
+        
+        ctx.save();
+        ctx.translate(shakeX, shakeY);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        stars.forEach(star => {
+            ctx.globalAlpha = star.alpha;
+            ctx.beginPath();
+            ctx.arc(star.x, star.y, star.size, 0, Math.PI*2);
+            ctx.fill();
+            if(isPlaying) star.y += 0.5;
+            if(star.y > height) star.y = 0;
+        });
+        ctx.globalAlpha = 1;
+
+        if (isDesktopMode) {
+            ctx.beginPath();
+            ctx.moveTo(gameLeft, 0);
+            ctx.lineTo(gameLeft, height);
+            ctx.moveTo(gameRight, 0);
+            ctx.lineTo(gameRight, height);
+            ctx.strokeStyle = CURRENT_CONFIG.mode === 'HARD' ? 'rgba(255, 0, 85, 0.3)' : 'rgba(0, 255, 255, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        if (isPlaying) {
+            score += 0.2;
+            uiScore.innerText = Math.floor(score);
+            handleSpawning();
+            player.update();
+            
+            if (player.y > height + 50) {
+                triggerGameOver();
+            }
+        }
+
+        nodes.forEach((n, i) => {
+            if (isPlaying) n.update();
+            n.draw();
+            if (n.markedForDeletion) nodes.splice(i, 1);
+        });
+
+        if (isPlaying) player.draw();
+
+        particles.forEach((p, i) => {
+            p.update();
+            p.draw();
+            if (p.life <= 0) particles.splice(i, 1);
+        });
+
+        ctx.restore();
+    }
+
+    const btnNormal = document.getElementById('btn-normal');
+    const btnHard = document.getElementById('btn-hard');
+
+    btnNormal.addEventListener('click', (e) => { e.stopPropagation(); startGame('normal'); });
+    btnHard.addEventListener('click', (e) => { e.stopPropagation(); startGame('hard'); });
+
+    btnNormal.addEventListener('touchstart', (e) => { e.stopPropagation(); e.preventDefault(); startGame('normal'); }, {passive: false});
+    btnHard.addEventListener('touchstart', (e) => { e.stopPropagation(); e.preventDefault(); startGame('hard'); }, {passive: false});
+
+</script>
+</body>
+</html>

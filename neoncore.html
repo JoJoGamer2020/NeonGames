@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neon Core: Orbital Defense</title>
+    <style>
+        /* --- CORE AESTHETICS --- */
+        body {
+            margin: 0; padding: 0; background-color: #050505;
+            overflow: hidden; font-family: 'Courier New', Courier, monospace;
+            touch-action: none; -webkit-user-select: none; user-select: none;
+            cursor: crosshair;
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* --- UI OVERLAY --- */
+        #ui {
+            position: absolute; top: 15px; left: 0; width: 100%;
+            pointer-events: none; display: flex;
+            justify-content: space-between; align-items: flex-start;
+            padding: 0 15px; box-sizing: border-box; z-index: 10;
+        }
+        
+        .hud-col {
+            display: flex; flex-direction: column; gap: 6px;
+            flex: 1; max-width: 48%;
+        }
+        .hud-left { align-items: flex-start; }
+        .hud-right { align-items: flex-end; }
+        
+        .hud-box {
+            background: rgba(0, 255, 255, 0.05); border: 1px solid #0ff;
+            padding: 8px 12px; border-radius: 6px; backdrop-filter: blur(4px);
+            color: #fff; font-weight: bold; text-shadow: 0 0 10px #0ff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.1); 
+            font-size: 1rem; white-space: nowrap; display: inline-block;
+        }
+
+        #powerup-list {
+            display: flex; flex-direction: column; gap: 4px; margin-top: 4px; 
+            width: 100%; align-items: flex-start;
+        }
+        .p-item {
+            background: rgba(0,0,0,0.8); border: 1px solid #555;
+            border-radius: 4px; padding: 4px 8px; position: relative;
+            overflow: hidden; height: 20px; display: flex;
+            align-items: center; justify-content: flex-start;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5); width: 100%;
+            box-sizing: border-box;
+        }
+        .p-bar {
+            position: absolute; bottom: 0; left: 0; height: 100%;
+            background: #fff; width: 100%; opacity: 0.2; transition: width 0.1s linear;
+        }
+        .p-text {
+            position: relative; z-index: 2; font-size: 0.75rem;
+            text-shadow: 0 0 3px black; letter-spacing: 0.5px; font-weight: bold;
+        }
+
+        /* Core Status & Shield */
+        .status-header {
+            display: flex; justify-content: flex-end; align-items: center;
+            width: 100%; gap: 5px;
+        }
+        .status-label {
+            font-size: 0.9rem; border-color:#ff0055; color:#ff0055;
+        }
+        .shield-badge {
+            color: #00ccff; font-weight: bold; font-size: 0.9rem;
+            text-shadow: 0 0 10px #00ccff; display: none;
+            background: rgba(0, 204, 255, 0.1); padding: 4px 8px;
+            border: 1px solid #00ccff; border-radius: 6px;
+            backdrop-filter: blur(4px);
+        }
+
+        .health-bar-container {
+            width: 100%; height: 14px; background: #111;
+            border: 1px solid #555; border-radius: 4px; overflow: hidden;
+            position: relative;
+        }
+        .health-fill {
+            height: 100%; background: #ff0055; width: 100%;
+            box-shadow: 0 0 15px #ff0055; transition: width 0.2s;
+        }
+        .shield-active-border {
+            position: absolute; top:0; left:0; width:100%; height:100%;
+            border: 2px solid #00ccff; box-sizing: border-box;
+            box-shadow: 0 0 15px #00ccff, inset 0 0 10px #00ccff;
+            display: none; z-index: 20;
+        }
+
+        @media (max-width: 480px) {
+            .hud-box { font-size: 0.8rem; padding: 6px 10px; }
+            #ui { padding: 0 10px; top: 10px; }
+            .health-bar-container { height: 10px; }
+            #best-display { font-size: 0.7rem; }
+            .status-label { font-size: 0.8rem; }
+            .shield-badge { font-size: 0.8rem; }
+        }
+
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5, 5, 5, 0.95); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; 
+            z-index: 1000; pointer-events: auto; backdrop-filter: blur(5px);
+        }
+
+        h1 {
+            color: #0ff; font-size: 2.8rem; text-transform: uppercase;
+            letter-spacing: 5px; text-shadow: 0 0 30px #0ff; margin: 0 0 10px 0;
+            text-align: center; animation: floatTitle 3s infinite ease-in-out;
+        }
+        @keyframes floatTitle { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-10px);} }
+
+        p { color: #ccc; font-size: 1.1rem; margin: 5px 0; text-align: center; }
+
+        .btn-container { display: flex; gap: 15px; margin-top: 30px; flex-wrap: wrap; justify-content: center; }
+        .btn {
+            padding: 15px 30px; font-size: 1.1rem; color: #050505;
+            border: none; border-radius: 6px; font-weight: 900;
+            cursor: pointer; text-transform: uppercase; font-family: inherit;
+            transition: transform 0.1s, box-shadow 0.2s; min-width: 100px;
+        }
+        
+        .btn-easy { background: #00ff88; box-shadow: 0 0 15px rgba(0, 255, 136, 0.5); }
+        .btn-normal { background: #0ff; box-shadow: 0 0 15px rgba(0, 255, 255, 0.5); }
+        .btn-hard { background: #ff0055; color: white; box-shadow: 0 0 15px rgba(255, 0, 85, 0.5); }
+        .btn:active { transform: scale(0.95); }
+
+        #mute-btn {
+            position: absolute; bottom: 20px; right: 20px;
+            background: rgba(0,0,0,0.6); border: 1px solid #555;
+            color: #777; padding: 10px; border-radius: 6px;
+            cursor: pointer; z-index: 2000; font-family: inherit; font-size: 0.8rem;
+        }
+        #mute-btn.active { border-color: #0ff; color: #0ff; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div class="hud-col hud-left">
+            <div class="hud-box">SCORE: <span id="score">0</span></div>
+            <div id="powerup-list"></div>
+        </div>
+        
+        <div class="hud-col hud-right">
+            <div class="status-header">
+                <div id="shield-counter" class="shield-badge">SHIELD x0</div>
+                <div class="hud-box status-label">CORE STATUS</div>
+            </div>
+            <div class="health-bar-container">
+                <div class="health-fill" id="core-health"></div>
+                <div class="shield-active-border" id="shield-ui"></div>
+            </div>
+            <div style="color:#888; font-size:0.8rem; margin-top:4px;" id="best-display">BEST: 0</div>
+        </div>
+    </div>
+
+    <button id="mute-btn" class="active">AUDIO: ON</button>
+
+    <div id="start-screen">
+        <h1>NEON CORE</h1>
+        <p>Defend the Center.</p>
+        <p>Mouse/Touch to Aim. Auto-Fire Active.</p>
+        
+        <div class="btn-container">
+            <button class="btn btn-easy" id="btn-easy">EASY</button>
+            <button class="btn btn-normal" id="btn-normal">NORMAL</button>
+            <button class="btn btn-hard" id="btn-hard">HARD</button>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    /** --- AUDIO ENGINE --- */
+    const AudioSys = {
+        ctx: null, master: null, isMuted: false,
+        init() {
+            if (!this.ctx) {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AC();
+                this.master = this.ctx.createGain();
+                this.master.gain.value = 0.30; 
+                this.master.connect(this.ctx.destination);
+            }
+            if(this.ctx.state === 'suspended') this.ctx.resume();
+        },
+        toggleMute() {
+            this.isMuted = !this.isMuted;
+            if(this.ctx) this.isMuted ? this.master.disconnect() : this.master.connect(this.ctx.destination);
+            return this.isMuted;
+        },
+        playTone(type, freq, decay, vol, slide=0) {
+            if(!this.ctx || this.isMuted) return;
+            const t = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, t);
+            if(slide!==0) osc.frequency.linearRampToValueAtTime(freq+slide, t+decay);
+            gain.gain.setValueAtTime(vol, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t+decay);
+            osc.connect(gain); gain.connect(this.master);
+            osc.start(t); osc.stop(t+decay+0.1);
+        },
+        sfx(id) {
+            if(!this.ctx) return;
+            switch(id) {
+                case 'shoot': this.playTone('triangle', 800, 0.1, 0.15, -400); break;
+                case 'rail': this.playTone('square', 1000, 0.2, 0.2, -600); break;
+                case 'hit': this.playTone('square', 200, 0.1, 0.2, -50); break;
+                case 'powerup': 
+                    this.playTone('sine', 600, 0.4, 0.4, 600); 
+                    setTimeout(()=>this.playTone('sine', 1200, 0.4, 0.4, 600), 100);
+                    break;
+                case 'shieldUp': this.playTone('sawtooth', 300, 0.5, 0.3, 300); break;
+                case 'shieldDown': this.playTone('sawtooth', 300, 0.3, 0.3, -100); break;
+                case 'nuke': 
+                    this.playTone('sawtooth', 100, 1.0, 0.5, -80);
+                    this.playTone('square', 50, 1.2, 0.5, -40);
+                    break;
+                case 'nova': this.playTone('triangle', 600, 0.5, 0.4, 0); break;
+                case 'laser': this.playTone('sawtooth', 80, 0.1, 0.2, 0); break;
+                case 'heal': this.playTone('sine', 400, 0.5, 0.4, 200); break;
+                case 'freeze': this.playTone('sine', 1200, 1.0, 0.3, -1000); break;
+                case 'saw': this.playTone('sawtooth', 100, 0.1, 0.2, 0); break;
+                case 'explosion': 
+                    this.playTone('sawtooth', 150, 0.3, 0.4, -100);
+                    this.playTone('square', 80, 0.4, 0.4, -40);
+                    break;
+                case 'shock': this.playTone('sawtooth', 50, 0.8, 0.5, -30); break;
+                case 'mine': this.playTone('square', 150, 0.4, 0.4, -100); break;
+                case 'chain': this.playTone('sawtooth', 1200, 0.1, 0.2, -200); break;
+                case 'blackhole': this.playTone('square', 50, 1.5, 0.4, -10); break;
+                case 'gameover': this.playTone('sawtooth', 300, 1.5, 0.6, -280); break;
+            }
+        }
+    };
+
+    /** --- CONFIGURATION --- */
+    const CONFIG = {
+        easy:   { spawnRate: 100, hp: 150, speedMult: 0.6 }, // Slower spawn start
+        normal: { spawnRate: 80, hp: 100, speedMult: 0.9 },
+        hard:   { spawnRate: 40, hp: 70,  speedMult: 1.4 }
+    };
+
+    // POOL: Hearts heavily weighted (12 entries)
+    const POWERUPS_BASE = [
+        { type: 'rapid',  color: '#ffff00', duration: 400, label: "RAPID FIRE" },
+        { type: 'spread', color: '#00ff88', duration: 400, label: "SPREAD SHOT" },
+        { type: 'rear',   color: '#aaaaaa', duration: 400, label: "REAR GUARD" },
+        { type: 'side',   color: '#4b0082', duration: 400, label: "SIDE SHOT" },
+        { type: 'clone',  color: '#00ffff', duration: 400, label: "CLONE" },
+        { type: 'barrage',color: '#0000ff', duration: 300, label: "BARRAGE" },
+        { type: 'blast',  color: '#ff8800', duration: 300, label: "BLAST AMMO" },
+        { type: 'ricochet',color:'#ff66cc', duration: 400, label: "RICOCHET" },
+        { type: 'homing', color: '#e600ff', duration: 400, label: "HOMING" },
+        { type: 'orbital',color: '#008080', duration: 600, label: "ORBITAL SAW" },
+        { type: 'shield', color: '#00ccff', duration: 0, label: "SHIELD +1" },
+        { type: 'miner',  color: '#ffaa00', duration: 0, label: "MINES" },
+        { type: 'chain',  color: '#ffee00', duration: 400, label: "CHAIN LIGHTNING" },
+        { type: 'blackhole', color: '#9400d3', duration: 0, label: "BLACK HOLE" },
+        { type: 'pierce', color: '#aa00ff', duration: 400, label: "PIERCE SHOT" },
+        { type: 'freeze', color: '#00ffff', duration: 300, label: "FREEZE (90%)" },
+        { type: 'railgun',color: '#00ff00', duration: 300, label: "RAILGUN" },
+        { type: 'laser',  color: '#ff0000', duration: 300, label: "RED LASER" },
+        { type: 'nova',   color: '#ffffff', duration: 0,   label: "NOVA" },
+        { type: 'shock',  color: '#00ffff', duration: 0,   label: "SHOCKWAVE" },
+        { type: 'nuke',   color: '#ff4400', duration: 0,   label: "NUKE" },
+        { type: 'heal',   color: '#ff0055', duration: 0,   label: "HEAL" }
+    ];
+
+    let POWERUPS = [];
+    const addP = (type, count) => {
+        const p = POWERUPS_BASE.find(x => x.type === type);
+        if(p) for(let i=0; i<count; i++) POWERUPS.push(p);
+    };
+
+    addP('rapid', 3); addP('spread', 3); addP('rear', 3); addP('side', 3); addP('clone', 2);
+    addP('blast', 2); addP('ricochet', 2); addP('homing', 2); addP('orbital', 2); 
+    addP('shield', 2); addP('miner', 2); addP('chain', 2); addP('barrage', 2);
+    addP('pierce', 1); addP('freeze', 1); addP('railgun', 1); addP('laser', 1); 
+    addP('nova', 1); addP('shock', 1); addP('nuke', 1); addP('blackhole', 1);
+    addP('heal', 12); // High spawn rate
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const uiScore = document.getElementById('score');
+    const uiHealth = document.getElementById('core-health');
+    const uiShield = document.getElementById('shield-counter');
+    const uiShieldBorder = document.getElementById('shield-ui');
+    const uiPowerupList = document.getElementById('powerup-list');
+    const uiBest = document.getElementById('best-display');
+    const startScreen = document.getElementById('start-screen');
+    
+    let width, height, cx, cy;
+    let animationId = null;
+    let lastTime = 0;
+
+    let state = {
+        mode: 'normal',
+        score: 0,
+        highScores: JSON.parse(localStorage.getItem('neonCore_final_scores')) || { easy:0, normal:0, hard:0 },
+        playing: false,
+        health: 100,
+        maxHealth: 100,
+        frame: 0,
+        shake: 0,
+        activePowerups: [],
+        shieldCount: 0, 
+        novaQueue: 0
+    };
+
+    let player = { angle: 0, dist: 60 };
+    let projectiles = [];
+    let enemies = [];
+    let particles = [];
+    let stars = [];
+    let orbitals = []; 
+    let mines = [];
+    let shockwaves = [];
+    let blackholes = [];
+
+    function resize() {
+        width = window.innerWidth; height = window.innerHeight;
+        canvas.width = width; canvas.height = height;
+        cx = width / 2; cy = height / 2;
+        stars = Array(80).fill().map(() => ({
+            x: Math.random()*width, y: Math.random()*height, 
+            size: Math.random()*2, alpha: Math.random()
+        }));
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function updatePointer(x, y) { player.angle = Math.atan2(y - cy, x - cx); }
+    ['touchmove', 'touchstart'].forEach(e => canvas.addEventListener(e, ev => {
+        ev.preventDefault(); updatePointer(ev.touches[0].clientX, ev.touches[0].clientY);
+    }, {passive:false}));
+    ['mousemove', 'mousedown'].forEach(e => canvas.addEventListener(e, ev => updatePointer(ev.clientX, ev.clientY)));
+
+    function spawnProjectile(angleOffset = 0, originX = null, originY = null) {
+        let startX = originX || (cx + Math.cos(player.angle) * player.dist);
+        let startY = originY || (cy + Math.sin(player.angle) * player.dist);
+        const a = originX ? angleOffset : (player.angle + angleOffset);
+        
+        const isPierce = hasPowerup('pierce');
+        const isBlast = hasPowerup('blast');
+        const isRail = hasPowerup('railgun');
+        const isRicochet = hasPowerup('ricochet');
+        const isChain = hasPowerup('chain');
+        
+        let speed = 12;
+        let pen = isPierce ? 4 : 1;
+        let dmg = 1;
+        if(isBlast) dmg = 2; 
+
+        if (isRail) { speed = 45; pen = 50; dmg = 100; }
+
+        projectiles.push({
+            x: startX, y: startY,
+            vx: Math.cos(a) * speed, vy: Math.sin(a) * speed,
+            life: 80, penetration: pen, damage: dmg,
+            blast: isBlast, rail: isRail, ricochet: isRicochet, chain: isChain,
+            hitList: [] 
+        });
+    }
+
+    function spawnEntity() {
+        const angle = Math.random() * Math.PI * 2;
+        const r = Math.max(width, height) / 1.5 + 60;
+        const x = cx + Math.cos(angle) * r;
+        const y = cy + Math.sin(angle) * r;
+        const id = Math.random().toString(36).substr(2, 9);
+        
+        if(Math.random() < 0.25) {
+            let avail = POWERUPS.filter(p => {
+                if(p.type === 'heal' && state.health >= state.maxHealth) return false;
+                return true;
+            });
+            const pType = avail[Math.floor(Math.random() * avail.length)]; 
+            enemies.push({
+                id, x, y, type: 'powerup', pData: pType,
+                hp: 1, speed: 1.5, size: 12, 
+                color: pType.color, scoreVal: 0
+            });
+            return;
+        }
+
+        const roll = Math.random();
+        let variant;
+        const baseSpeed = CONFIG[state.mode].speedMult;
+
+        if (roll < 0.15) variant = { sub: 'scout', hp: 1, speed: 1.8 * baseSpeed, damage: 10, size: 10, color: '#cc00ff', val: 5 };
+        else if (roll < 0.25) variant = { sub: 'wasp', hp: 1, speed: 2.5 * baseSpeed, damage: 15, size: 8, color: '#ffaa00', val: 10, offset: Math.random()*10 };
+        else if (roll < 0.35) variant = { sub: 'weaver', hp: 2, speed: 1.6 * baseSpeed, damage: 12, size: 11, color: '#00ff88', val: 10, offset: Math.random()*10 };
+        else if (roll < 0.45) variant = { sub: 'splitter', hp: 3, speed: 1.2 * baseSpeed, damage: 15, size: 14, color: '#0088ff', val: 15 };
+        else if (roll < 0.55) variant = { sub: 'tank', hp: 5, speed: 0.9 * baseSpeed, damage: 20, size: 16, color: '#ff0055', val: 15 };
+        else if (roll < 0.60) variant = { sub: 'lancer', hp: 2, speed: 3.2 * baseSpeed, damage: 25, size: 9, color: '#ffffff', val: 20 };
+        else if (roll < 0.68) variant = { sub: 'ghost', hp: 3, speed: 1.4 * baseSpeed, damage: 15, size: 13, color: '#999999', val: 20 };
+        else if (roll < 0.75) variant = { sub: 'pulsar', hp: 6, speed: 1.0 * baseSpeed, damage: 20, size: 15, color: '#ff00ff', val: 25 };
+        else if (roll < 0.80) variant = { sub: 'dasher', hp: 2, speed: 1.4 * baseSpeed, damage: 18, size: 10, color: '#ffff00', val: 15, offset: Math.random()*10 };
+        else if (roll < 0.85) variant = { sub: 'viper', hp: 2, speed: 2.0 * baseSpeed, damage: 12, size: 9, color: '#00ffaa', val: 15, offset: Math.random()*10 };
+        else if (roll < 0.90) variant = { sub: 'guardian', hp: 10, speed: 0.6 * baseSpeed, damage: 30, size: 20, color: '#aa00aa', val: 30 };
+        else if (roll < 0.95) variant = { sub: 'drone', hp: 1, speed: 1.3 * baseSpeed, damage: 8, size: 6, color: '#8888ff', val: 10 };
+        else if (roll < 0.98) variant = { sub: 'hunter', hp: 4, speed: 1.7 * baseSpeed, damage: 25, size: 14, color: '#ff5500', val: 20, offset: Math.random()*10 };
+        else variant = { sub: 'titan', hp: 20, speed: 0.4 * baseSpeed, damage: 40, size: 28, color: '#ff3300', val: 50 };
+
+        enemies.push({ id, x, y, type: 'enemy', ...variant });
+    }
+
+    function spawnExplosion(x, y, color, count=10) {
+        for(let i=0; i<count; i++) {
+            const a = Math.random()*Math.PI*2; const s = Math.random()*4+1;
+            particles.push({
+                x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s,
+                life: 1.0, color, decay: 0.03 + Math.random()*0.03
+            });
+        }
+    }
+
+    function addScore(amount) {
+        state.score += amount;
+        if(state.score > state.highScores[state.mode]) {
+            state.highScores[state.mode] = state.score;
+            uiBest.innerText = `BEST (${state.mode.toUpperCase()}): ${state.highScores[state.mode]}`;
+            localStorage.setItem('neonCore_final_scores', JSON.stringify(state.highScores));
+        }
+        uiScore.innerText = Math.floor(state.score);
+    }
+
+    function startGame(mode) {
+        AudioSys.init();
+        state.mode = mode;
+        const cfg = CONFIG[mode];
+        state.health = cfg.hp;
+        state.maxHealth = cfg.hp;
+        state.score = 0;
+        state.playing = true;
+        state.shake = 0;
+        state.activePowerups = [];
+        state.shieldCount = 0;
+        state.novaQueue = 0;
+        
+        updatePowerupUI();
+        updateShieldUI();
+        enemies = []; projectiles = []; particles = []; orbitals = []; mines = []; shockwaves = []; blackholes = [];
+        
+        uiScore.innerText = "0";
+        uiHealth.style.width = "100%";
+        uiBest.innerText = `BEST (${mode.toUpperCase()}): ${state.highScores[mode]}`;
+        startScreen.style.display = 'none';
+        
+        if(animationId) cancelAnimationFrame(animationId);
+        lastTime = performance.now();
+        loop(lastTime);
+    }
+
+    function updateShieldUI() {
+        if(state.shieldCount > 0) {
+            uiShield.style.display = 'block';
+            uiShield.innerText = `SHIELD x${state.shieldCount}`;
+            uiShieldBorder.style.display = 'block';
+        } else {
+            uiShield.style.display = 'none';
+            uiShieldBorder.style.display = 'none';
+        }
+    }
+
+    function activatePowerup(pData, originX, originY) {
+        if(pData.type === 'heal') {
+            state.health = Math.min(state.health + 30, state.maxHealth);
+            uiHealth.style.width = (state.health / state.maxHealth * 100) + "%";
+            AudioSys.sfx('heal');
+            spawnExplosion(cx, cy, '#ff0055', 20);
+        } else if (pData.type === 'nuke') {
+            enemies.forEach(e => {
+                if(e.type === 'enemy') {
+                    spawnExplosion(e.x, e.y, e.color, 15);
+                    addScore(e.val);
+                }
+            });
+            enemies = []; state.shake = 30; addScore(100); AudioSys.sfx('nuke');
+            ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fillRect(0,0,width,height);
+        } else if (pData.type === 'nova') {
+            state.novaQueue = 3; 
+        } else if (pData.type === 'shield') {
+            state.shieldCount++; updateShieldUI(); AudioSys.sfx('shieldUp');
+        } else if (pData.type === 'freeze') {
+            AudioSys.sfx('freeze'); addPowerupState(pData);
+        } else if (pData.type === 'orbital') {
+            if(!hasPowerup('orbital')) orbitals.push({angle: 0}, {angle: Math.PI/2}, {angle: Math.PI}, {angle: Math.PI*1.5});
+            addPowerupState(pData); AudioSys.sfx('powerup');
+        } else if (pData.type === 'shock') {
+            enemies.forEach(e => {
+                if(e.type === 'enemy') {
+                    let angle = Math.atan2(e.y - cy, e.x - cx);
+                    e.x += Math.cos(angle) * 450; 
+                    e.y += Math.sin(angle) * 450;
+                }
+            });
+            AudioSys.sfx('shock');
+            shockwaves.push({r: 50, alpha: 1.0}); 
+        } else if (pData.type === 'miner') {
+            for(let i=0; i<3; i++) {
+                let a = Math.random() * Math.PI * 2; let d = 100 + Math.random() * 50;
+                mines.push({x: cx + Math.cos(a)*d, y: cy + Math.sin(a)*d, active: true});
+            }
+            AudioSys.sfx('powerup');
+        } else if (pData.type === 'blackhole') {
+            // Spawn at exact location
+            blackholes.push({x: originX || cx, y: originY || cy, life: 300});
+            AudioSys.sfx('blackhole');
+        } else {
+            addPowerupState(pData); AudioSys.sfx('powerup');
+        }
+    }
+
+    function addPowerupState(pData) {
+        const existing = state.activePowerups.find(p => p.type === pData.type);
+        if(existing) existing.timer = pData.duration;
+        else state.activePowerups.push({ type: pData.type, timer: pData.duration, max: pData.duration, label: pData.label, color: pData.color });
+        updatePowerupUI();
+    }
+
+    function updatePowerupUI() {
+        uiPowerupList.innerHTML = '';
+        state.activePowerups.forEach(p => {
+            const el = document.createElement('div'); el.className = 'p-item';
+            el.style.borderColor = p.color; el.style.color = p.color;
+            const pct = (p.timer / p.max) * 100;
+            el.innerHTML = `<div class="p-bar" style="background:${p.color}; width:${pct}%"></div><div class="p-text">${p.label}</div>`;
+            uiPowerupList.appendChild(el);
+        });
+    }
+
+    function hasPowerup(type) { return state.activePowerups.some(p => p.type === type); }
+
+    function drawHeart(ctx, x, y, size, color) {
+        ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 10;
+        ctx.beginPath();
+        const topCurve = size * 0.3;
+        ctx.moveTo(x, y + topCurve);
+        ctx.bezierCurveTo(x, y, x - size/2, y, x - size/2, y + topCurve);
+        ctx.bezierCurveTo(x - size/2, y + (size + topCurve)/2, x, y + (size + topCurve)/2, x, y + size);
+        ctx.bezierCurveTo(x, y + (size + topCurve)/2, x + size/2, y + (size + topCurve)/2, x + size/2, y + topCurve);
+        ctx.bezierCurveTo(x + size/2, y, x, y, x, y + topCurve);
+        ctx.fill();
+    }
+
+    function gameOver() {
+        state.playing = false; state.shake = 20; AudioSys.sfx('gameover');
+        if(state.score > state.highScores[state.mode]) {
+            state.highScores[state.mode] = Math.floor(state.score);
+            localStorage.setItem('neonCore_final_scores', JSON.stringify(state.highScores));
+        }
+        setTimeout(() => {
+            startScreen.style.display = 'flex';
+            document.querySelector('#start-screen h1').innerText = "CORE DESTROYED";
+            uiBest.innerText = `BEST (${state.mode.toUpperCase()}): ${state.highScores[state.mode]}`;
+        }, 1500);
+    }
+
+    function loop(now) {
+        animationId = requestAnimationFrame(loop);
+        const dt = (now - lastTime)/1000; lastTime = now;
+
+        if(state.playing) {
+            state.frame++;
+            
+            if (state.activePowerups.length > 0) {
+                state.activePowerups.forEach(p => p.timer--);
+                if(!hasPowerup('orbital')) orbitals = [];
+                state.activePowerups = state.activePowerups.filter(p => p.timer > 0);
+                if(state.frame % 4 === 0) updatePowerupUI();
+            } else if (uiPowerupList.hasChildNodes()) {
+                uiPowerupList.innerHTML = '';
+            }
+
+            if(state.novaQueue > 0 && state.frame % 10 === 0) {
+                for(let i=0; i<16; i++) {
+                    const angle = i * (Math.PI * 2 / 16);
+                    projectiles.push({
+                        x: cx + Math.cos(angle) * 60, y: cy + Math.sin(angle) * 60,
+                        vx: Math.cos(angle)*15, vy: Math.sin(angle)*15,
+                        life: 80, penetration: 3, damage: 2, hitList: [], nova: true
+                    });
+                }
+                AudioSys.sfx('nova');
+                state.novaQueue--;
+            }
+
+            const isRapid = hasPowerup('rapid');
+            const isSpread = hasPowerup('spread');
+            const isRear = hasPowerup('rear');
+            const isSide = hasPowerup('side');
+            const isClone = hasPowerup('clone');
+            const isBarrage = hasPowerup('barrage');
+            
+            let fireRate = isRapid ? 5 : 12;
+            
+            if(state.frame % fireRate === 0) {
+                spawnProjectile(); 
+                if(isSpread) { spawnProjectile(0.2); spawnProjectile(-0.2); }
+                if(isSide) { spawnProjectile(Math.PI/2); spawnProjectile(-Math.PI/2); }
+                if(isRear) { spawnProjectile(Math.PI); }
+                if(isClone) {
+                    let offX = cx + Math.cos(player.angle + Math.PI)*80;
+                    let offY = cy + Math.sin(player.angle + Math.PI)*80;
+                    spawnProjectile(0, offX, offY);
+                }
+                if(hasPowerup('railgun') && state.frame%10===0) AudioSys.sfx('rail'); 
+                else if(!hasPowerup('railgun')) AudioSys.sfx('shoot');
+            }
+
+            if(isBarrage && state.frame % 4 === 0) {
+                let a = Math.random() * Math.PI * 2;
+                projectiles.push({
+                    x: cx, y: cy, vx: Math.cos(a) * 10, vy: Math.sin(a) * 10,
+                    life: 60, penetration: 1, damage: 1, hitList: [], barrage: true 
+                });
+            }
+
+            // Slower Spawn Ramp Up (1500 instead of 1200)
+            let spawnCalc = Math.max(25, CONFIG[state.mode].spawnRate - Math.floor(state.score/1500));
+            if(hasPowerup('freeze')) spawnCalc = Math.floor(spawnCalc * 3); 
+            if(state.frame % spawnCalc === 0) spawnEntity();
+
+            const isHoming = hasPowerup('homing');
+            
+            for(let i=projectiles.length-1; i>=0; i--) {
+                let p = projectiles[i];
+                if(p.ricochet) {
+                    if(p.x < 0 || p.x > width) p.vx *= -1;
+                    if(p.y < 0 || p.y > height) p.vy *= -1;
+                }
+                if((isHoming || p.barrage) && !p.rail) {
+                    let target = null, minDist = p.barrage ? 1000000 : 250000; 
+                    for(let e of enemies) {
+                        let d = (e.x - p.x)**2 + (e.y - p.y)**2;
+                        if(d < minDist) { minDist = d; target = e; }
+                    }
+                    if(target) {
+                        let desiredAngle = Math.atan2(target.y - p.y, target.x - p.x);
+                        let speed = 12;
+                        p.vx = p.vx * 0.8 + Math.cos(desiredAngle) * speed * 0.2;
+                        p.vy = p.vy * 0.8 + Math.sin(desiredAngle) * speed * 0.2;
+                    }
+                }
+                p.x += p.vx; p.y += p.vy;
+                if(!p.ricochet && (p.x<0||p.x>width||p.y<0||p.y>height)) { projectiles.splice(i,1); continue; }
+                p.life--; if(p.life<=0) { projectiles.splice(i,1); continue; }
+
+                for(let j=enemies.length-1; j>=0; j--) {
+                    let e = enemies[j];
+                    if(p.hitList.includes(e.id)) continue; 
+                    let hitDist = p.rail ? 30 : (e.size + 10);
+                    let distSq = (p.x-e.x)**2 + (p.y-e.y)**2;
+                    if(distSq < hitDist**2) {
+                        e.hp -= p.damage; p.hitList.push(e.id); p.penetration--;
+                        spawnExplosion(p.x, p.y, '#fff', 3); AudioSys.sfx('hit');
+                        
+                        if(p.blast) {
+                            spawnExplosion(p.x, p.y, '#ff8800', 15);
+                            enemies.forEach(ne => {
+                                if(ne.id !== e.id && ne.type === 'enemy') {
+                                    let nd = (ne.x - p.x)**2 + (ne.y - p.y)**2;
+                                    if(nd < 150**2) ne.hp -= 5; 
+                                }
+                            });
+                        }
+                        if(p.chain) {
+                            AudioSys.sfx('chain');
+                            let chains = 0;
+                            enemies.forEach(ne => {
+                                if(chains < 5 && ne.id !== e.id && ne.type === 'enemy') {
+                                    let nd = (ne.x - e.x)**2 + (ne.y - e.y)**2;
+                                    if(nd < 300**2) {
+                                        ne.hp -= 5;
+                                        spawnExplosion(ne.x, ne.y, '#ffee00', 5);
+                                        ctx.strokeStyle = '#ffee00'; ctx.lineWidth = 2;
+                                        ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(ne.x, ne.y); ctx.stroke();
+                                        chains++;
+                                    }
+                                }
+                            });
+                        }
+                        if(e.hp <= 0) {
+                            if(e.type === 'powerup') { activatePowerup(e.pData, e.x, e.y); } 
+                            else {
+                                addScore(e.val); spawnExplosion(e.x, e.y, e.color, e.size);
+                                AudioSys.sfx('explosion'); state.shake = e.sub === 'titan' ? 8 : 3;
+                                if(e.sub === 'splitter') {
+                                    for(let k=0; k<2; k++) {
+                                        enemies.push({
+                                            id: Math.random().toString(36).substr(2),
+                                            x: e.x + (Math.random()-0.5)*20, y: e.y + (Math.random()-0.5)*20,
+                                            type: 'enemy', sub: 'scout', hp: 1, speed: 2, damage: 5, size: 8, color: '#cc00ff', val: 5
+                                        });
+                                    }
+                                }
+                            }
+                            enemies.splice(j,1);
+                        } else { e.x -= p.vx*0.1; e.y -= p.vy*0.1; }
+                        if(p.penetration <= 0) { projectiles.splice(i,1); break; }
+                    }
+                }
+            }
+
+            if(hasPowerup('laser')) {
+                let lx = cx + Math.cos(player.angle) * 60;
+                let ly = cy + Math.sin(player.angle) * 60;
+                let ex = cx + Math.cos(player.angle) * 1000;
+                let ey = cy + Math.sin(player.angle) * 1000;
+                if(state.frame%5===0) AudioSys.sfx('laser');
+                for(let j=enemies.length-1; j>=0; j--) {
+                    let e = enemies[j];
+                    let area = Math.abs((ey-ly)*e.x - (ex-lx)*e.y + ex*ly - ey*lx);
+                    let len = Math.sqrt((ey-ly)**2 + (ex-lx)**2);
+                    let dist = area/len;
+                    let dot = (e.x - cx) * Math.cos(player.angle) + (e.y - cy) * Math.sin(player.angle);
+                    if(dist < e.size + 10 && dot > 0) {
+                        e.hp -= 2; spawnExplosion(e.x, e.y, '#ff0000', 1);
+                        if(e.hp <= 0) {
+                            if(e.type === 'powerup') activatePowerup(e.pData, e.x, e.y);
+                            else { addScore(e.val); spawnExplosion(e.x, e.y, e.color, e.size); AudioSys.sfx('explosion'); }
+                            enemies.splice(j,1);
+                        }
+                    }
+                }
+            }
+
+            for(let k=blackholes.length-1; k>=0; k--) {
+                let bh = blackholes[k];
+                bh.life--;
+                if(bh.life <= 0) blackholes.splice(k, 1);
+                else {
+                    for(let j=enemies.length-1; j>=0; j--) {
+                        let e = enemies[j];
+                        if(e.type !== 'enemy') continue;
+                        let dSq = (bh.x-e.x)**2 + (bh.y-e.y)**2;
+                        if(dSq < 350**2) { 
+                            e.x += (bh.x - e.x) * 0.15; // Strong Suck
+                            e.y += (bh.y - e.y) * 0.15;
+                            if(dSq < 30**2) { // Crush Zone
+                                e.hp -= 50;
+                                spawnExplosion(e.x, e.y, '#9400d3', 2);
+                                if(e.hp <= 0) {
+                                    addScore(e.val); spawnExplosion(e.x, e.y, e.color, e.size); AudioSys.sfx('explosion');
+                                    enemies.splice(j, 1);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if(orbitals.length > 0) {
+                orbitals.forEach(orb => {
+                    orb.angle += 0.2; let dist = 80;
+                    let ox = cx + Math.cos(orb.angle) * dist;
+                    let oy = cy + Math.sin(orb.angle) * dist;
+                    for(let j=enemies.length-1; j>=0; j--) {
+                        let e = enemies[j];
+                        if(e.type !== 'enemy') continue;
+                        let d = (ox-e.x)**2 + (oy-e.y)**2;
+                        if(d < (e.size + 10)**2) {
+                            e.hp -= 0.5; spawnExplosion(e.x, e.y, '#008080', 1);
+                            if(state.frame%10===0) AudioSys.sfx('saw');
+                            if(e.hp <= 0) {
+                                addScore(e.val); spawnExplosion(e.x, e.y, e.color, e.size); AudioSys.sfx('explosion');
+                                enemies.splice(j, 1);
+                            }
+                        }
+                    }
+                });
+            }
+
+            for(let m = mines.length - 1; m >= 0; m--) {
+                let mine = mines[m];
+                for(let j=enemies.length-1; j>=0; j--) {
+                    let e = enemies[j];
+                    if(e.type !== 'enemy') continue;
+                    let d = (mine.x-e.x)**2 + (mine.y-e.y)**2;
+                    if(d < (e.size + 15)**2) {
+                        e.hp -= 50; spawnExplosion(mine.x, mine.y, '#ffaa00', 20); AudioSys.sfx('mine');
+                        mines.splice(m, 1);
+                        if(e.hp <= 0) {
+                            addScore(e.val); spawnExplosion(e.x, e.y, e.color, e.size); AudioSys.sfx('explosion');
+                            enemies.splice(j, 1);
+                        }
+                        break; 
+                    }
+                }
+            }
+
+            const isFreeze = hasPowerup('freeze');
+            for(let i=enemies.length-1; i>=0; i--) {
+                let e = enemies[i];
+                let dx = cx - e.x, dy = cy - e.y;
+                let angle = Math.atan2(dy, dx);
+                let currentSpeed = isFreeze ? e.speed * 0.1 : e.speed;
+
+                if(e.sub === 'wasp') {
+                    let pA = angle + Math.PI/2; let osc = Math.sin(state.frame * 0.2 + e.offset) * 2;
+                    e.x += Math.cos(angle)*currentSpeed + Math.cos(pA)*osc; e.y += Math.sin(angle)*currentSpeed + Math.sin(pA)*osc;
+                } else if (e.sub === 'weaver') {
+                    let pA = angle + Math.PI/2; let osc = Math.sin(state.frame * 0.05 + e.offset) * 3;
+                    e.x += Math.cos(angle)*currentSpeed + Math.cos(pA)*osc; e.y += Math.sin(angle)*currentSpeed + Math.sin(pA)*osc;
+                } else if (e.sub === 'pulsar') {
+                    e.x += Math.cos(angle)*currentSpeed; e.y += Math.sin(angle)*currentSpeed; e.size = 15 + Math.sin(state.frame * 0.1) * 5;
+                } else if (e.sub === 'dasher') {
+                    let surge = 1 + Math.sin(state.frame * 0.1) * 0.8; if(surge < 0.2) surge = 0.2;
+                    e.x += Math.cos(angle)*currentSpeed*surge; e.y += Math.sin(angle)*currentSpeed*surge;
+                } else if (e.sub === 'viper') {
+                    let pA = angle + Math.PI/2; let osc = Math.sin(state.frame * 0.5 + e.offset) * 1.5;
+                    e.x += Math.cos(angle)*currentSpeed + Math.cos(pA)*osc; e.y += Math.sin(angle)*currentSpeed + Math.sin(pA)*osc;
+                } else if (e.sub === 'hunter') {
+                    let curve = angle + Math.sin(state.frame * 0.02 + e.offset) * 0.5;
+                    e.x += Math.cos(curve)*currentSpeed; e.y += Math.sin(curve)*currentSpeed;
+                } else {
+                    e.x += Math.cos(angle)*currentSpeed; e.y += Math.sin(angle)*currentSpeed;
+                }
+
+                if(dx*dx + dy*dy < 40**2) {
+                    if(e.type === 'powerup' && e.pData.type === 'heal') {
+                        activatePowerup(e.pData, e.x, e.y);
+                    } else if(e.type === 'enemy') {
+                        if(state.shieldCount > 0) {
+                            state.shieldCount--; updateShieldUI(); AudioSys.sfx('shieldDown');
+                            spawnExplosion(cx, cy, '#00ccff', 20); state.shake = 5;
+                        } else {
+                            state.health -= e.damage;
+                            uiHealth.style.width = Math.max(0, (state.health / state.maxHealth * 100)) + "%";
+                            state.shake = e.damage > 20 ? 15 : 8;
+                            spawnExplosion(e.x, e.y, '#ff0055', 15);
+                            AudioSys.sfx('explosion');
+                            if(state.health <= 0) gameOver();
+                        }
+                    }
+                    enemies.splice(i,1);
+                }
+            }
+            if(state.shake > 0) state.shake *= 0.9;
+        }
+
+        let sx = (Math.random()-0.5)*state.shake, sy = (Math.random()-0.5)*state.shake;
+        ctx.fillStyle = '#050505'; ctx.fillRect(0,0,width,height);
+        ctx.save(); ctx.translate(sx,sy);
+
+        ctx.fillStyle = '#fff';
+        stars.forEach(s => {
+            ctx.globalAlpha = s.alpha * 0.5;
+            ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI*2); ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+
+        blackholes.forEach(bh => {
+            ctx.shadowColor = '#9400d3'; ctx.shadowBlur = 20; ctx.fillStyle = '#000';
+            ctx.strokeStyle = '#9400d3'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(bh.x, bh.y, 20, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.arc(bh.x, bh.y, 40 - (state.frame%20), 0, Math.PI*2); ctx.stroke();
+        });
+
+        for(let i=shockwaves.length-1; i>=0; i--) {
+            let sw = shockwaves[i];
+            ctx.shadowBlur = 0; ctx.strokeStyle = `rgba(0, 255, 255, ${sw.alpha})`; ctx.lineWidth = 5;
+            ctx.beginPath(); ctx.arc(cx, cy, sw.r, 0, Math.PI*2); ctx.stroke();
+            sw.r += 10; sw.alpha -= 0.05;
+            if(sw.alpha <= 0) shockwaves.splice(i, 1);
+        }
+
+        ctx.shadowBlur = 20 + Math.sin(now/200)*10;
+        ctx.shadowColor = '#0ff';
+        ctx.fillStyle = '#050505';
+        ctx.beginPath(); ctx.arc(cx, cy, 30, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = '#0ff'; ctx.lineWidth = 3; ctx.stroke();
+        
+        if(state.shieldCount > 0) {
+            ctx.shadowColor = '#00ccff'; ctx.strokeStyle = '#00ccff';
+            for(let k=0; k<Math.min(state.shieldCount, 3); k++) {
+                ctx.lineWidth = 2 + k; ctx.beginPath(); ctx.arc(cx, cy, 40 + (k*5), 0, Math.PI*2); ctx.stroke();
+            }
+        }
+
+        ctx.fillStyle = state.health < 30 ? '#ff0055' : '#0ff';
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.beginPath(); ctx.arc(cx, cy, 15 + Math.sin(now/150)*5, 0, Math.PI*2); ctx.fill();
+
+        if(state.playing) {
+            if(hasPowerup('laser')) {
+                ctx.save(); ctx.translate(cx, cy); ctx.rotate(player.angle);
+                ctx.shadowBlur = 20; ctx.shadowColor = '#ff0000';
+                ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 4;
+                ctx.beginPath(); ctx.moveTo(60, 0); ctx.lineTo(1000, 0); ctx.stroke();
+                ctx.restore();
+            }
+
+            ctx.shadowBlur = 15; ctx.shadowColor = '#0ff';
+            ctx.save(); ctx.translate(cx, cy); ctx.rotate(player.angle); ctx.translate(player.dist, 0);
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.moveTo(10,0); ctx.lineTo(-10,7); ctx.lineTo(-5,0); ctx.lineTo(-10,-7); ctx.fill();
+            ctx.restore();
+
+            if(hasPowerup('clone')) {
+                ctx.shadowBlur = 5; ctx.shadowColor = '#00ffff';
+                ctx.save(); ctx.translate(cx, cy); ctx.rotate(player.angle + Math.PI); ctx.translate(80, 0);
+                ctx.globalAlpha = 0.6; ctx.fillStyle = '#00ffff';
+                ctx.beginPath(); ctx.moveTo(10,0); ctx.lineTo(-10,7); ctx.lineTo(-5,0); ctx.lineTo(-10,-7); ctx.fill();
+                ctx.globalAlpha = 1; ctx.restore();
+            }
+
+            orbitals.forEach(o => {
+                let ox = cx + Math.cos(o.angle) * 80; let oy = cy + Math.sin(o.angle) * 80;
+                ctx.fillStyle = '#008080'; ctx.shadowColor = '#008080';
+                ctx.beginPath(); ctx.arc(ox, oy, 8, 0, Math.PI*2); ctx.fill();
+            });
+
+            mines.forEach(m => {
+                ctx.fillStyle = '#ffaa00'; ctx.shadowColor = '#ffaa00';
+                ctx.beginPath(); ctx.arc(m.x, m.y, 6, 0, Math.PI*2); ctx.fill();
+            });
+
+            projectiles.forEach(p => {
+                ctx.fillStyle = p.blast ? '#ff8800' : (p.penetration > 1 ? '#aa00ff' : '#0ff');
+                if(p.rail) ctx.fillStyle = '#00ff00';
+                else if(p.ricochet) ctx.fillStyle = '#ff66cc';
+                else if(p.nova) ctx.fillStyle = '#ffffff';
+                else if(p.barrage) ctx.fillStyle = '#0000ff';
+                ctx.shadowColor = ctx.fillStyle;
+                
+                if(p.rail) { ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI*2); ctx.fill(); }
+                else if (p.nova) { ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI*2); ctx.fill(); }
+                else { ctx.fillRect(p.x-2, p.y-2, 4, 4); }
+            });
+
+            enemies.forEach(e => {
+                if(e.type === 'powerup') {
+                    if(e.pData.type === 'heal') drawHeart(ctx, e.x, e.y-5, e.size*1.2, '#ff0055');
+                    else {
+                        ctx.shadowColor = e.color; ctx.fillStyle = e.color; ctx.shadowBlur = 20;
+                        ctx.beginPath(); ctx.arc(e.x, e.y, e.size, 0, Math.PI*2); ctx.fill();
+                        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(e.x, e.y, 4, 0, Math.PI*2); ctx.fill();
+                    }
+                } else {
+                    ctx.shadowColor = e.color; ctx.fillStyle = e.color; ctx.shadowBlur = 10;
+                    ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(now/500);
+                    if(e.sub === 'ghost') ctx.globalAlpha = 0.3 + Math.abs(Math.sin(state.frame*0.05))*0.7;
+                    if (e.sub === 'titan') { ctx.beginPath(); for(let k=0; k<6; k++) ctx.lineTo(e.size*Math.cos(k*Math.PI/3), e.size*Math.sin(k*Math.PI/3)); ctx.fill(); } 
+                    else if (e.sub === 'tank' || e.sub === 'splitter' || e.sub === 'guardian') { ctx.fillRect(-e.size, -e.size, e.size*2, e.size*2); } 
+                    else if (e.sub === 'lancer' || e.sub === 'dasher' || e.sub === 'viper') { ctx.beginPath(); ctx.moveTo(e.size,0); ctx.lineTo(-e.size, e.size/3); ctx.lineTo(-e.size, -e.size/3); ctx.fill(); } 
+                    else if (e.sub === 'pulsar' || e.sub === 'drone') { ctx.beginPath(); ctx.arc(0,0, e.size, 0, Math.PI*2); ctx.fill(); } 
+                    else if (e.sub === 'hunter') { ctx.beginPath(); ctx.arc(0,0, e.size, 0, Math.PI*2); ctx.arc(-5,0, e.size-3, 0, Math.PI*2, true); ctx.fill(); } 
+                    else { ctx.beginPath(); ctx.moveTo(e.size,0); ctx.lineTo(-e.size/2, e.size); ctx.lineTo(-e.size/2, -e.size); ctx.fill(); }
+                    ctx.globalAlpha = 1;
+                    ctx.restore();
+                }
+            });
+        }
+
+        particles.forEach((p, i) => {
+            ctx.shadowColor = p.color; ctx.shadowBlur = 5; ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.life; ctx.fillRect(p.x, p.y, 3, 3);
+            p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+            if(p.life <= 0) particles.splice(i,1);
+        });
+        ctx.globalAlpha = 1;
+        ctx.restore();
+    }
+
+    document.getElementById('btn-easy').onclick = () => startGame('easy');
+    document.getElementById('btn-normal').onclick = () => startGame('normal');
+    document.getElementById('btn-hard').onclick = () => startGame('hard');
+    
+    const muteBtn = document.getElementById('mute-btn');
+    muteBtn.onclick = () => {
+        AudioSys.init();
+        const m = AudioSys.toggleMute();
+        muteBtn.innerText = m ? "AUDIO: OFF" : "AUDIO: ON";
+        muteBtn.classList.toggle('active');
+    };
+</script>
+</body>
+</html>

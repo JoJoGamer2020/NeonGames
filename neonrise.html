@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Neon Rise: Ultimate Edition</title>
+    <style>
+        /* --- CORE AESTHETICS --- */
+        body {
+            margin: 0; padding: 0; background-color: #050505;
+            overflow: hidden; font-family: 'Courier New', Courier, monospace;
+            touch-action: none; -webkit-user-select: none; user-select: none;
+            cursor: default;
+            -webkit-tap-highlight-color: transparent; /* Fix for mobile tap flash */
+        }
+        canvas { display: block; width: 100%; height: 100%; z-index: 1; }
+
+        /* --- UI OVERLAY --- */
+        #ui {
+            position: absolute; top: 15px; left: 0; width: 100%; height: 50px;
+            pointer-events: none; display: none;
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: start;
+            padding: 0 15px;
+            gap: 10px;
+            box-sizing: border-box;
+            z-index: 100;
+        }
+        
+        .hud-group { display: flex; gap: 10px; flex-wrap: wrap; }
+        .hud-group.right { justify-content: flex-end; }
+
+        .hud-box {
+            background: rgba(0, 255, 255, 0.05); border: 1px solid #0ff;
+            padding: 8px 15px; border-radius: 8px; backdrop-filter: blur(4px);
+            color: #fff; font-weight: bold; text-shadow: 0 0 10px #0ff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.1); font-size: 1rem;
+            white-space: nowrap; transition: transform 0.1s;
+            pointer-events: auto; /* Fixes interaction */
+        }
+        .hud-best { border-color: #ffd700; color: #ffd700; text-shadow: 0 0 10px #ffd700; }
+        
+        /* New Timer Features inserted minimally */
+        #active-effects {
+            position: absolute; top: 70px; left: 15px; width: 150px;
+            display: flex; flex-direction: column; gap: 5px; pointer-events: none; z-index: 90;
+        }
+        .timer-row {
+            height: 6px; width: 100%; background: rgba(255,255,255,0.1);
+            border-radius: 3px; overflow: hidden; position: relative;
+        }
+        .timer-fill { height: 100%; width: 100%; transition: width 0.1s linear; }
+        .timer-label {
+            position: absolute; top: -14px; left: 0; font-size: 10px; color: #fff;
+            text-shadow: 0 0 2px #000; font-weight: bold; text-transform: uppercase;
+        }
+
+        /* --- MENUS --- */
+        #start-screen, #pause-menu, #game-over-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5, 5, 5, 0.95); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; 
+            z-index: 1000; pointer-events: auto; cursor: auto;
+            backdrop-filter: blur(5px);
+        }
+        #pause-menu, #game-over-screen { display: none; background: rgba(0,0,0,0.85); z-index: 1100; }
+
+        h1, h2 {
+            color: #0ff; text-transform: uppercase;
+            letter-spacing: 8px; text-shadow: 0 0 20px #0ff; margin: 0 0 20px 0;
+            text-align: center;
+        }
+        h1 { font-size: 3rem; animation: pulseTitle 2s infinite; }
+        @keyframes pulseTitle { 0%{text-shadow: 0 0 20px #0ff;} 50%{text-shadow: 0 0 40px #0ff, 0 0 10px #fff;} 100%{text-shadow: 0 0 20px #0ff;} }
+        
+        p { color: #ccc; font-size: 1rem; margin-bottom: 30px; text-align: center; line-height: 1.5; }
+
+        .btn-container {
+            display: flex; gap: 15px; margin-top: 10px;
+            flex-wrap: wrap; justify-content: center; z-index: 1001; 
+        }
+        .btn {
+            padding: 15px 30px; font-size: 1.1rem; color: #050505;
+            border: none; border-radius: 6px; font-weight: 900;
+            cursor: pointer; text-transform: uppercase; font-family: inherit;
+            transition: transform 0.1s, box-shadow 0.2s; min-width: 120px;
+            pointer-events: auto; user-select: none;
+        }
+        .btn-easy { background: #00ff88; box-shadow: 0 0 15px rgba(0, 255, 136, 0.5); }
+        .btn-normal { background: #0ff; box-shadow: 0 0 15px rgba(0, 255, 255, 0.5); }
+        .btn-hard { background: #ff0055; color: white; box-shadow: 0 0 15px rgba(255, 0, 85, 0.5); }
+        .btn:active { transform: scale(0.95); }
+
+        #menu-btn {
+            font-size: 1.8rem; color: #fff; cursor: pointer; pointer-events: auto;
+            user-select: none; opacity: 0.8; transition: opacity 0.2s;
+            line-height: 1; margin-top: 5px; text-shadow: 0 0 10px #fff;
+            justify-self: center;
+        }
+
+        #mute-btn {
+            position: absolute; bottom: 20px; right: 20px;
+            background: rgba(0,0,0,0.5); border: 1px solid #555;
+            color: #555; padding: 10px 15px; border-radius: 8px;
+            cursor: pointer; z-index: 2000; font-family: inherit; font-size: 0.75rem;
+            pointer-events: auto;
+        }
+        #mute-btn.active { border-color: #0ff; color: #0ff; text-shadow: 0 0 8px #0ff; }
+
+        /* Mobile Tap Zones */
+        #touch-zones {
+            position: absolute; top:0; left:0; width:100%; height:100%; z-index: 50;
+            display: flex; pointer-events: none;
+        }
+        .zone { width: 50%; height: 100%; pointer-events: auto; }
+
+        @media (max-width: 600px) {
+            h1 { font-size: 2rem; }
+            .btn { padding: 12px 20px; font-size: 0.9rem; }
+            .hud-box { padding: 6px 10px; font-size: 0.8rem; }
+            #ui { padding: 0 5px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div class="hud-group">
+            <div class="hud-box">SCORE: <span id="score">0</span></div>
+        </div>
+        
+        <div id="menu-btn">⋮</div>
+
+        <div class="hud-group right">
+            <div class="hud-box hud-best">BEST: <span id="best-score">0</span></div>
+        </div>
+    </div>
+    
+    <div id="active-effects"></div>
+
+    <button id="mute-btn" class="active">AUDIO: ON</button>
+    
+    <div id="touch-zones">
+        <div class="zone" id="zone-left"></div>
+        <div class="zone" id="zone-right"></div>
+    </div>
+
+    <div id="pause-menu">
+        <h2>PAUSED</h2>
+        <div class="btn-container" style="flex-direction:column;">
+            <button class="btn btn-normal" id="btn-resume">RESUME</button>
+            <button class="btn btn-hard" id="btn-quit">QUIT</button>
+        </div>
+    </div>
+
+    <div id="game-over-screen">
+        <h1 style="color:#ff0055; text-shadow: 0 0 30px #ff0055;">FALLEN</h1>
+        <p id="final-score-display">SCORE: 0</p>
+        <div class="btn-container">
+            <button class="btn btn-normal" id="btn-restart">TRY AGAIN</button>
+            <button class="btn btn-hard" id="btn-menu">MENU</button>
+        </div>
+    </div>
+
+    <div id="start-screen">
+        <h1>NEON RISE</h1>
+        <p>Ascend the Void.<br>Stack Shields.<br>Global High Score.</p>
+        <div class="btn-container">
+            <button class="btn btn-easy" id="btn-easy">EASY</button>
+            <button class="btn btn-normal" id="btn-normal">NORMAL</button>
+            <button class="btn btn-hard" id="btn-hard">HARD</button>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    /** --- AUDIO ENGINE (SFX Only, No BGM) --- */
+    const AudioSys = {
+        ctx: null, master: null, isMuted: false, activeLoops: {},
+        init: function() {
+            if (!this.ctx) {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AC();
+                this.master = this.ctx.createGain();
+                this.master.gain.value = 0.3;
+                this.master.connect(this.ctx.destination);
+            }
+            if (this.ctx.state === 'suspended') this.ctx.resume();
+        },
+        toggleMute: function() {
+            this.isMuted = !this.isMuted;
+            if (this.ctx) {
+                if(this.isMuted) {
+                    this.master.disconnect();
+                    this.stopLoop('jetpack');
+                } else {
+                    this.master.connect(this.ctx.destination);
+                }
+            }
+            return this.isMuted;
+        },
+        playTone: function(type, freq, dur, vol) {
+            if(!this.ctx || this.isMuted) return;
+            const t = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = type; osc.frequency.setValueAtTime(freq, t);
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(vol, t + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+            osc.connect(gain); gain.connect(this.master);
+            osc.start(t); osc.stop(t + dur + 0.1);
+            setTimeout(() => { try{osc.disconnect(); gain.disconnect();}catch(e){} }, (dur+0.2)*1000);
+        },
+        startLoop(id, type, freq, vol) {
+            if(this.activeLoops[id] || this.isMuted || !this.ctx) return;
+            const t = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const g = this.ctx.createGain();
+            osc.type = type; osc.frequency.value = freq;
+            g.gain.setValueAtTime(0, t);
+            g.gain.linearRampToValueAtTime(vol, t+0.1);
+            osc.connect(g); g.connect(this.master);
+            osc.start(t);
+            this.activeLoops[id] = { osc, g };
+        },
+        stopLoop(id) {
+            if(!this.activeLoops[id]) return;
+            const { osc, g } = this.activeLoops[id];
+            const t = this.ctx.currentTime;
+            g.gain.linearRampToValueAtTime(0, t+0.1);
+            osc.stop(t+0.1);
+            setTimeout(() => { try{osc.disconnect(); g.disconnect();}catch(e){} }, 150);
+            delete this.activeLoops[id];
+        },
+        sfx: function(id) {
+            switch(id) {
+                case 'jump': this.playTone('sine', 300, 0.2, 0.4); break;
+                case 'doubleJump': this.playTone('triangle', 500, 0.2, 0.3); break;
+                case 'spring': this.playTone('square', 200, 0.4, 0.2); break;
+                case 'rocket': this.playTone('sawtooth', 100, 0.8, 0.2); break;
+                case 'shieldGain': this.playTone('sine', 600, 0.1, 0.3); setTimeout(()=>this.playTone('sine', 900, 0.2, 0.3), 100); break;
+                case 'shieldLost': this.playTone('sawtooth', 200, 0.3, 0.3); break;
+                case 'break': this.playTone('sawtooth', 150, 0.1, 0.3); break;
+                case 'fall': this.playTone('sawtooth', 100, 1.0, 0.5); break;
+                case 'powerup': this.playTone('sine', 1000, 0.3, 0.2); break;
+            }
+        }
+    };
+
+    /** --- CONFIG --- */
+    const CONFIG = {
+        easy:   { gravity: 0.15, jumpForce: 8,  platWidth: 100, moveChance: 0.1, breakChance: 0.0 },
+        normal: { gravity: 0.2,  jumpForce: 9.5,  platWidth: 80,  moveChance: 0.25, breakChance: 0.1 },
+        hard:   { gravity: 0.25, jumpForce: 10.5, platWidth: 60,  moveChance: 0.4, breakChance: 0.2 }
+    };
+    
+    // Feature: 10 Powerups + Stackable Shield
+    const PU_TYPES = {
+        jetpack: { color: '#0ff', label: 'JETPACK', dur: 300 },
+        wings: { color: '#ff0', label: 'WINGS', dur: 400 }, 
+        time: { color: '#90f', label: 'TIME WARP', dur: 400 },
+        wide: { color: '#fa0', label: 'WIDE PLAT', dur: 400 },
+        trampoline: { color: '#f0f', label: 'BOUNCE', dur: 400 },
+        safety: { color: '#fff', label: 'NET', dur: 600 },
+        feather: { color: '#aaa', label: 'FEATHER', dur: 400 }, 
+        shield: { color: '#00f', label: 'SHIELD +1', dur: 0 }, 
+        spring: { color: '#0f0', label: 'SPRING', dur: 0 }, 
+        rocket: { color: '#f00', label: 'ROCKET', dur: 0 } 
+    };
+
+    let currentMode = 'normal';
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    
+    // UI Elements
+    const ui = document.getElementById('ui');
+    const uiScore = document.getElementById('score');
+    const uiBest = document.getElementById('best-score');
+    const uiEffects = document.getElementById('active-effects');
+    const startScreen = document.getElementById('start-screen');
+    const pauseMenu = document.getElementById('pause-menu');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    const finalScoreDisplay = document.getElementById('final-score-display');
+    const menuBtn = document.getElementById('menu-btn');
+
+    let width, height, animationId;
+    let score = 0, highScore = parseInt(localStorage.getItem('neonRise_global_best')) || 0;
+    let maxReachedHeight = 0; 
+    let isPlaying = false, isPaused = false;
+    let keys = { left: false, right: false };
+    
+    // Game Entities
+    let player = { 
+        x: 0, y: 0, r: 8, vx: 0, vy: 0, 
+        shieldCount: 0, // Feature: Stackable
+        effects: {}
+    };
+    
+    let platforms = [], powerups = [], particles = [], fireflies = [];
+    uiBest.innerText = highScore;
+
+    function resize() {
+        width = window.innerWidth; height = window.innerHeight;
+        canvas.width = width; canvas.height = height;
+        initFireflies();
+    }
+    
+    function initFireflies() {
+        fireflies = [];
+        for(let i=0; i<40; i++) {
+            fireflies.push({
+                x: Math.random()*width, y: Math.random()*height,
+                size: Math.random()*2, alpha: Math.random(),
+                vx: (Math.random()-0.5)*0.5, vy: (Math.random()-0.5)*0.5
+            });
+        }
+    }
+    window.addEventListener('resize', resize); resize();
+
+    // --- INPUT ---
+    window.addEventListener('keydown', e => {
+        if(e.code==='ArrowLeft') keys.left = true;
+        if(e.code==='ArrowRight') keys.right = true;
+        if((e.code==='Space'||e.code==='ArrowUp') && isPlaying) tryDoubleJump();
+        if(e.code==='Escape' && isPlaying) togglePause();
+    });
+    window.addEventListener('keyup', e => {
+        if(e.code==='ArrowLeft') keys.left = false;
+        if(e.code==='ArrowRight') keys.right = false;
+    });
+
+    const zLeft = document.getElementById('zone-left');
+    const zRight = document.getElementById('zone-right');
+    const handleTouch = (key, state) => (e) => { 
+        if(isPlaying && e.cancelable) e.preventDefault(); 
+        keys[key] = state; 
+    };
+
+    zLeft.addEventListener('touchstart', handleTouch('left', true), {passive:false});
+    zLeft.addEventListener('touchend', handleTouch('left', false), {passive:false});
+    zRight.addEventListener('touchstart', handleTouch('right', true), {passive:false});
+    zRight.addEventListener('touchend', handleTouch('right', false), {passive:false});
+    
+    // Double Jump Touch
+    window.addEventListener('touchstart', (e) => {
+        if(isPlaying && player.effects['wings']) tryDoubleJump();
+    });
+
+    // --- GAME LOGIC ---
+    function initGame(mode) {
+        AudioSys.init(); // Init Audio Context here
+        currentMode = mode;
+        const cfg = CONFIG[mode];
+        
+        player.x = width / 2;
+        player.y = height - 150;
+        player.vx = 0;
+        player.vy = -cfg.jumpForce;
+        player.shieldCount = 0;
+        player.effects = {};
+        
+        score = 0; maxReachedHeight = 0;
+        uiScore.innerText = "0"; uiBest.innerText = highScore;
+        
+        platforms = [{ x: width/2 - 100, y: height - 50, w: 200, h: 15, type: 'normal' }];
+        powerups = [];
+        
+        let y = height - 150;
+        while (y > -height) {
+            y -= (70 + Math.random() * 50);
+            generatePlatform(y);
+        }
+
+        isPlaying = true; isPaused = false;
+        startScreen.style.display = 'none';
+        gameOverScreen.style.display = 'none';
+        ui.style.display = 'grid';
+        uiEffects.innerHTML = '';
+        
+        loop();
+    }
+
+    function generatePlatform(y) {
+        const cfg = CONFIG[currentMode];
+        const w = cfg.platWidth;
+        const x = Math.random() * (width - w);
+        let type = 'normal';
+        const rand = Math.random();
+        if (rand < cfg.breakChance) type = 'break';
+        else if (rand < cfg.breakChance + cfg.moveChance) type = 'moving';
+        
+        platforms.push({ x: x, y: y, w: w, h: 15, type: type, vx: type === 'moving' ? (Math.random() < 0.5 ? 2 : -2) : 0, active: true });
+
+        // Powerup Spawn (20%)
+        if(type !== 'break' && Math.random() < 0.20) {
+            const types = Object.keys(PU_TYPES);
+            const pType = types[Math.floor(Math.random() * types.length)];
+            powerups.push({ x: x + w/2, y: y - 25, type: pType, active: true });
+        }
+    }
+
+    function spawnParticles(x, y, color, count=5) {
+        for(let i=0; i<count; i++) {
+            particles.push({ x: x, y: y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, life: 1.0, color: color });
+        }
+    }
+
+    function tryDoubleJump() {
+        if(player.effects['wings'] && player.vy > -2 && !player.effects['jetpack']) {
+            const cfg = CONFIG[currentMode];
+            player.vy = -cfg.jumpForce * 1.2;
+            spawnParticles(player.x, player.y, '#ffff00', 5);
+            AudioSys.sfx('doubleJump');
+        }
+    }
+
+    function activatePowerup(type) {
+        const def = PU_TYPES[type];
+        
+        // Stackable Shield
+        if(type === 'shield') {
+            player.shieldCount++;
+            AudioSys.sfx('shieldGain');
+            return;
+        }
+
+        // Instants
+        if(def.dur === 0) {
+            if(type === 'spring') { player.vy = -20; AudioSys.sfx('spring'); }
+            if(type === 'rocket') { player.vy = -35; AudioSys.sfx('rocket'); spawnParticles(player.x, player.y, '#f00', 15); }
+        } else {
+            // Timed
+            player.effects[type] = def.dur;
+            AudioSys.sfx('powerup');
+        }
+    }
+
+    function gameOver() {
+        if(player.shieldCount > 0) {
+            player.shieldCount--;
+            player.vy = -20; // Super bounce save
+            AudioSys.sfx('shieldLost');
+            spawnParticles(player.x, height, '#00ccff', 20);
+            return;
+        }
+
+        isPlaying = false;
+        AudioSys.sfx('fall');
+        AudioSys.stopLoop('jetpack');
+        
+        if(score > highScore) {
+            highScore = score;
+            localStorage.setItem('neonRise_global_best', highScore);
+            uiBest.innerText = highScore;
+        }
+        
+        finalScoreDisplay.innerText = "SCORE: " + score;
+        setTimeout(() => { gameOverScreen.style.display = 'flex'; }, 500);
+    }
+
+    function togglePause() {
+        if(!isPlaying) return;
+        isPaused = !isPaused;
+        pauseMenu.style.display = isPaused ? 'flex' : 'none';
+        if(isPaused) AudioSys.stopLoop('jetpack');
+    }
+
+    function loop() {
+        if(!isPlaying) return;
+        animationId = requestAnimationFrame(loop);
+        if(isPaused) return;
+
+        const cfg = CONFIG[currentMode];
+        const timeScale = player.effects['time'] ? 0.6 : 1.0;
+
+        // --- UPDATE ---
+        
+        // Powerup Timers & UI
+        uiEffects.innerHTML = '';
+        for(let key in player.effects) {
+            player.effects[key]--;
+            const p = PU_TYPES[key];
+            // Draw Timer Bar UI
+            const pct = (player.effects[key] / p.dur) * 100;
+            const row = document.createElement('div');
+            row.className = 'timer-row';
+            row.innerHTML = `<div class="timer-label">${p.label}</div><div class="timer-fill" style="width:${pct}%; background:${p.color}"></div>`;
+            uiEffects.appendChild(row);
+
+            if(player.effects[key] <= 0) delete player.effects[key];
+        }
+
+        // Jetpack Logic
+        if(player.effects['jetpack']) {
+            player.vy -= 1.5; 
+            if(player.vy < -12) player.vy = -12;
+            spawnParticles(player.x, player.y + 10, '#00ffff', 1);
+            AudioSys.startLoop('jetpack', 'sawtooth', 100, 0.15);
+        } else {
+            AudioSys.stopLoop('jetpack');
+        }
+
+        // Movement
+        if (keys.left) player.vx -= 0.8;
+        if (keys.right) player.vx += 0.8;
+        player.vx *= 0.9; player.x += player.vx;
+        if (player.x < -player.r) player.x = width + player.r;
+        if (player.x > width + player.r) player.x = -player.r;
+
+        // Gravity
+        if(!player.effects['jetpack']) {
+            let g = cfg.gravity;
+            if(player.effects['feather']) g *= 0.5;
+            player.vy += g * timeScale;
+        }
+        player.y += player.vy * timeScale;
+
+        // Safety Net
+        if(player.effects['safety'] && player.vy > 0 && player.y > height - 20) {
+            player.vy = -20;
+            spawnParticles(player.x, height, '#ffffff', 10);
+            AudioSys.sfx('spring');
+        }
+
+        // Camera Scroll
+        if (player.y < height * 0.45) {
+            let diff = (height * 0.45) - player.y;
+            player.y = height * 0.45;
+            maxReachedHeight += diff;
+            let newScore = Math.floor(maxReachedHeight / 10);
+            if(newScore > score) {
+                score = newScore; uiScore.innerText = score;
+                if(score > highScore) { highScore = score; localStorage.setItem('neonRise_global_best', highScore); uiBest.innerText = highScore; }
+            }
+            platforms.forEach(p => p.y += diff);
+            powerups.forEach(p => p.y += diff);
+            particles.forEach(p => p.y += diff);
+            
+            let highestY = height;
+            platforms.forEach(p => { if(p.y < highestY) highestY = p.y; });
+            if (highestY > 50) generatePlatform(highestY - (80 + Math.random()*50));
+        }
+
+        platforms = platforms.filter(p => p.y < height + 50);
+        powerups = powerups.filter(p => p.y < height + 50);
+
+        // Platform Collisions
+        if (player.vy > 0 && !player.effects['jetpack']) { 
+            platforms.forEach(p => {
+                if (!p.active) return;
+                let pad = player.effects['wide'] ? 20 : 0;
+                let pw = p.w + (pad*2);
+                let px = p.x - pad;
+
+                if (player.y + player.r >= p.y && player.y + player.r <= p.y + p.h + player.vy + 10 &&
+                    player.x + player.r > px && player.x - player.r < px + pw) {
+                    
+                    player.vy = player.effects['trampoline'] ? -20 : -cfg.jumpForce;
+                    spawnParticles(player.x, player.y + player.r, '#0ff', 3);
+                    
+                    if (p.type === 'break') {
+                        p.active = false; AudioSys.sfx('break'); spawnParticles(p.x + p.w/2, p.y, '#fff', 8);
+                    } else {
+                        AudioSys.sfx('jump');
+                    }
+                }
+            });
+        }
+
+        // Powerup Collisions
+        powerups.forEach(pu => {
+            if(!pu.active) return;
+            let dx = player.x - pu.x; let dy = player.y - pu.y;
+            if(Math.sqrt(dx*dx + dy*dy) < 30) {
+                pu.active = false; activatePowerup(pu.type);
+            }
+        });
+
+        // Moving Plats
+        platforms.forEach(p => {
+            if (p.type === 'moving') {
+                p.x += p.vx * timeScale;
+                if (p.x < 0 || p.x + p.w > width) p.vx *= -1;
+            }
+        });
+
+        if (player.y > height) gameOver();
+
+        // Particles
+        for(let i=particles.length-1; i>=0; i--) {
+            let p = particles[i]; p.x += p.vx; p.y += p.vy; p.life -= 0.05;
+            if(p.life <= 0) particles.splice(i, 1);
+        }
+        // Fireflies
+        fireflies.forEach(f => {
+            f.x += f.vx; f.y += f.vy;
+            if(f.x < 0) f.x = width; if(f.x > width) f.x = 0;
+            if(f.y < 0) f.y = height; if(f.y > height) f.y = 0;
+        });
+
+        // --- DRAW ---
+        ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, width, height);
+
+        if(player.effects['safety']) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fillRect(0, height - 20, width, 20);
+            ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.moveTo(0, height-20); ctx.lineTo(width, height-20); ctx.stroke();
+        }
+
+        ctx.fillStyle = '#00ff88';
+        fireflies.forEach(f => {
+            ctx.globalAlpha = f.alpha * 0.4; ctx.beginPath(); ctx.arc(f.x, f.y, f.size, 0, Math.PI*2); ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+
+        platforms.forEach(p => {
+            if(!p.active) return;
+            let drawX = p.x; let drawW = p.w;
+            if(player.effects['wide']) {
+                drawX -= 20; drawW += 40; ctx.shadowColor = '#fa0'; ctx.shadowBlur = 10;
+            } else {
+                ctx.shadowColor = '#000'; ctx.shadowBlur = 0;
+            }
+            
+            ctx.fillStyle = p.type === 'moving' ? '#ff0055' : (player.effects['trampoline'] && p.type !== 'break' ? '#f0f' : '#0ff');
+            if(p.type === 'break') { ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.5; }
+            if(p.type === 'moving') { ctx.shadowColor='#f05'; ctx.shadowBlur=5; }
+            
+            ctx.beginPath(); ctx.roundRect(drawX, p.y, drawW, p.h, 4); ctx.fill();
+            ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+        });
+
+        powerups.forEach(pu => {
+            if(!pu.active) return;
+            const c = PU_TYPES[pu.type].color;
+            ctx.fillStyle = c; ctx.shadowColor = c; ctx.shadowBlur = 15;
+            ctx.beginPath(); ctx.arc(pu.x, pu.y + Math.sin(Date.now()/200)*3, 8, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+        });
+
+        ctx.shadowBlur = 15; 
+        ctx.shadowColor = player.effects['jetpack'] ? '#00ffff' : '#fff';
+        ctx.fillStyle = player.effects['jetpack'] ? '#0ff' : '#fff';
+        
+        // Feature: Stackable Shield Visuals
+        if(player.shieldCount > 0) {
+            ctx.strokeStyle = '#00f'; ctx.shadowColor='#00f';
+            for(let i=0; i<player.shieldCount; i++) {
+                ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(player.x, player.y, player.r + 5 + (i*4), 0, Math.PI*2); ctx.stroke();
+            }
+        }
+        
+        ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI*2); ctx.fill();
+        ctx.shadowBlur = 0;
+
+        particles.forEach(p => {
+            ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 3, 3);
+        });
+        ctx.globalAlpha = 1;
+    }
+
+    // --- BUTTON HANDLERS (FIXED) ---
+    function bindBtn(id, cb) {
+        const el = document.getElementById(id);
+        const fn = (e) => { e.preventDefault(); e.stopPropagation(); cb(); };
+        el.addEventListener('click', fn);
+        el.addEventListener('touchstart', fn, {passive:false});
+    }
+
+    bindBtn('btn-easy', () => initGame('easy'));
+    bindBtn('btn-normal', () => initGame('normal'));
+    bindBtn('btn-hard', () => initGame('hard'));
+    bindBtn('btn-resume', togglePause);
+    bindBtn('btn-quit', () => {
+        isPaused = false; isPlaying = false;
+        pauseMenu.style.display = 'none'; startScreen.style.display = 'flex'; ui.style.display = 'none';
+        AudioSys.stopLoop('jetpack');
+    });
+    bindBtn('btn-restart', () => initGame(currentMode));
+    bindBtn('btn-menu', () => {
+        gameOverScreen.style.display = 'none'; startScreen.style.display = 'flex'; ui.style.display = 'none';
+        AudioSys.stopLoop('jetpack');
+    });
+    bindBtn('menu-btn', togglePause);
+
+    const muteBtn = document.getElementById('mute-btn');
+    const toggleMute = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        AudioSys.init();
+        const m = AudioSys.toggleMute();
+        muteBtn.innerText = m ? "AUDIO: OFF" : "AUDIO: ON";
+        muteBtn.classList.toggle('active');
+    };
+    muteBtn.addEventListener('click', toggleMute);
+    muteBtn.addEventListener('touchstart', toggleMute, {passive:false});
+
+</script>
+</body>
+</html>
