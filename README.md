@@ -16,8 +16,8 @@
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/neon-suite.git
-   cd neon-suite
+   git clone https://github.com/JoJoGamer2020/NeonGames.git
+   cd NeonGames
    ```
 
 2. **Launch the Hub:**
@@ -290,13 +290,13 @@ gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);  // Release
 ```bash
 # 1. Push to GitHub
 git add .
-git commit -m "Deploy Neon Suite"
+git commit -m "Deploy Neon Games"
 git push origin main
 
 # 2. Enable Pages
 # Go to: Settings → Pages → Source: main branch → Save
 
-# 3. Access at: https://yourusername.github.io/neon-suite/games.html
+# 3. Access at: https://yourusername.github.io/NeonGames/games.html
 ```
 
 ### Option 2: Netlify Drop
@@ -318,7 +318,7 @@ Upload files to: AWS S3, Azure Storage, Google Cloud Storage, or any web host. T
 ## 📁 REPOSITORY STRUCTURE
 
 ```
-neon-suite/
+NeonGames/
 ├── games.html          # Hub/Launcher
 ├── neonbreaker.html    # Brick Breaker
 ├── neonvoid.html       # Grappling Hook
@@ -435,10 +435,8 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 ## 🌟 CREDITS
 
-**Development Team:**
-* AI Model 1: Conceptual architecture & audio synthesis
-* AI Model 2: Integration & feature implementation
-* AI Model 3: Documentation & optimization
+**Development:**
+* JoJo
 
 **Inspiration:**
 * Classic arcade games (Breakout, Space Invaders, Missile Command)
@@ -497,7 +495,7 @@ This project proves that modern web games don't need massive frameworks, gigabyt
 > **Frame Rate:** `OPTIMAL`  
 > **Welcome to:** `THE VOID`
 
-**[▶ LAUNCH HUB](./games.html)**
+**[▶ LAUNCH HUB](https://jojogamer2020.github.io/NeonGames/games.html)**
 
 ---
 
